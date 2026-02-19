@@ -13,7 +13,7 @@ REST API 엔드포인트를 제공합니다.
 
 from datetime import date, timedelta
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Subquery, OuterRef, Sum
 from django.http import HttpResponse
 from django_filters import rest_framework as filters  # django-filter 라이브러리의 DRF 통합
 from rest_framework import viewsets
@@ -52,8 +52,8 @@ class AnalysisFilter(filters.FilterSet):
       GET /api/analyses/?case_category=개인정보&stage=소송중
     """
 
-    # 적합도 필터 — Analysis 모델에 정의된 선택지(High/Medium/Low)만 허용
-    suitability = filters.ChoiceFilter(choices=Analysis.SUITABILITY_CHOICES)
+    # 적합도 필터 — 쉼표 구분으로 복수 선택 가능 (예: ?suitability=High,Medium)
+    suitability = filters.BaseInFilter(field_name="suitability")
 
     # 사건 유형 필터 — 부분 문자열 검색 (예: "개인" → "개인정보" 매칭)
     case_category = filters.CharFilter(lookup_expr="icontains")
@@ -68,10 +68,13 @@ class AnalysisFilter(filters.FilterSet):
     # 사건 그룹 ID 필터 — 특정 사건 그룹에 속한 분석 결과만 조회
     case_group = filters.NumberFilter(field_name="case_group__id")
 
+    # 법적 분쟁 관련 여부 필터 — 기본값 True (무관 기사 숨김)
+    is_relevant = filters.BooleanFilter(field_name="is_relevant")
+
     class Meta:
         model = Analysis
         # 기본 필터 필드 목록 (위에서 개별 정의한 필터가 우선 적용됨)
-        fields = ["suitability", "case_category", "stage", "case_group"]
+        fields = ["suitability", "case_category", "stage", "case_group", "is_relevant"]
 
 
 # ──────────────────────────────────────────────
@@ -97,12 +100,58 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         Analysis.objects.select_related("article", "article__source", "case_group").all()
     )
 
+    def get_queryset(self):
+        """
+        is_relevant 파라미터가 없으면 기본적으로 관련 기사만 표시.
+        ?include_irrelevant=true 를 전달하면 무관 기사도 포함.
+        ?group_by_case=true 를 전달하면 같은 사건 그룹의 기사를 하나로 묶어 표시.
+        """
+        qs = super().get_queryset()
+        # 프론트에서 include_irrelevant=true 보내면 전체 표시
+        if self.request.query_params.get("include_irrelevant") == "true":
+            pass
+        elif "is_relevant" not in self.request.query_params:
+            qs = qs.filter(is_relevant=True)
+
+        # 사건 그룹별 대표 기사만 표시 (목록 액션에서만)
+        if (
+            self.request.query_params.get("group_by_case") == "true"
+            and self.action == "list"
+        ):
+            # 각 case_group 내에서 가장 최근 기사의 ID
+            latest_per_group = (
+                Analysis.objects.filter(
+                    case_group=OuterRef("case_group"),
+                    is_relevant=True,
+                )
+                .order_by("-article__published_at")
+                .values("id")[:1]
+            )
+            # case_group이 있는 분석 중 대표만 + case_group이 없는 분석 전부
+            qs = qs.filter(
+                Q(case_group__isnull=True)
+                | Q(id=Subquery(latest_per_group))
+            )
+
+        # related_count 어노테이션 (같은 사건 그룹의 다른 기사 수)
+        qs = qs.annotate(
+            related_count=Count(
+                "case_group__analyses",
+                filter=Q(case_group__analyses__is_relevant=True),
+            )
+        )
+
+        return qs
+
     # 필터셋 클래스 연결 — 위에서 정의한 AnalysisFilter 사용
     filterset_class = AnalysisFilter
 
     # 검색 필드 — ?search= 파라미터로 텍스트 검색 시 대상 필드들
     # 기사 제목, 피고(피청구인), AI 요약, 사건 유형에서 검색
-    search_fields = ["article__title", "defendant", "summary", "case_category"]
+    search_fields = [
+        "article__title", "defendant", "summary", "case_category",
+        "case_group__case_id", "case_group__name",
+    ]
 
     # 정렬 가능 필드 — ?ordering= 파라미터로 정렬 기준 변경 가능
     ordering_fields = ["analyzed_at", "article__published_at", "suitability"]
@@ -155,6 +204,12 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         today_high = Analysis.objects.filter(
             analyzed_at__date=today,
             suitability="High",
+        ).count()
+
+        # ── 2-1. 오늘 Medium 적합 판정 건수 ──
+        today_medium = Analysis.objects.filter(
+            analyzed_at__date=today,
+            suitability="Medium",
         ).count()
 
         # ── 3. 전체 분석 완료 건수 ──
@@ -218,6 +273,7 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({
             "today_collected": today_collected,
             "today_high": today_high,
+            "today_medium": today_medium,
             "total_analyzed": total_analyzed,
             "monthly_cost": monthly_cost,
             "suitability_distribution": suitability_distribution,

@@ -43,10 +43,16 @@ def validate_and_parse(raw_response: str) -> dict | None:
         "stage": "",
         "stage_detail": "",
         "case_name": "",
+        "is_relevant": True,
     }
     for key, default in defaults.items():
         if key not in data or data[key] is None:
             data[key] = default
+
+    # is_relevant 검증 (boolean이 아닌 값은 True로 보정)
+    if "is_relevant" in data:
+        if not isinstance(data["is_relevant"], bool):
+            data["is_relevant"] = True
 
     # summary 길이 제한
     if len(data.get("summary", "")) > 1000:

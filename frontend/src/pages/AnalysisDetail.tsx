@@ -91,6 +91,50 @@ export default function AnalysisDetail() {
               {analysis.suitability_reason}
             </p>
           </div>
+
+          {/* 유사 기사 목록 */}
+          {analysis.related_articles && analysis.related_articles.length > 0 && (
+            <div className="bg-white rounded-xl border border-[var(--color-border)] p-6">
+              <h2 className="text-sm font-semibold mb-4">
+                📰 유사 기사 ({analysis.related_articles.length}건)
+                {analysis.case_group && (
+                  <span className="ml-2 text-xs font-normal text-gray-500">
+                    {analysis.case_group.case_id} — {analysis.case_group.name}
+                  </span>
+                )}
+              </h2>
+              <div className="space-y-3">
+                {analysis.related_articles.map((ra) => (
+                  <div key={ra.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-start gap-2">
+                      <SuitabilityBadge value={ra.suitability} />
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          to={`/analyses/${ra.id}`}
+                          className="text-sm font-medium text-gray-800 hover:text-blue-600 line-clamp-1"
+                        >
+                          {ra.article_title}
+                        </Link>
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{ra.summary}</p>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                          <span>{ra.source_name}</span>
+                          <span>{ra.published_at?.slice(0, 10)}</span>
+                          <a
+                            href={ra.article_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline"
+                          >
+                            원문
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 오른쪽: 상세 카드 (sticky) */}

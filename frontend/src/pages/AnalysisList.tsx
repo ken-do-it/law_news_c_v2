@@ -17,6 +17,8 @@ export default function AnalysisList() {
     search: searchParams.get('search') || undefined,
     ordering: searchParams.get('ordering') || '-analyzed_at',
     page: Number(searchParams.get('page')) || 1,
+    include_irrelevant: searchParams.get('include_irrelevant') || undefined,
+    group_by_case: searchParams.get('group_by_case') !== 'false' ? 'true' : undefined,
   };
 
   const fetchData = useCallback(async () => {
@@ -77,6 +79,7 @@ export default function AnalysisList() {
             onChange={(e) => setFilter('suitability', e.target.value)}
           >
             <option value="">전체</option>
+            <option value="High,Medium">High + Medium</option>
             <option value="High">High</option>
             <option value="Medium">Medium</option>
             <option value="Low">Low</option>
@@ -97,6 +100,24 @@ export default function AnalysisList() {
             <option value="종결">종결</option>
           </select>
         </div>
+        <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={searchParams.get('group_by_case') !== 'false'}
+            onChange={(e) => setFilter('group_by_case', e.target.checked ? '' : 'false')}
+            className="rounded"
+          />
+          사건별 묶기
+        </label>
+        <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={filters.include_irrelevant === 'true'}
+            onChange={(e) => setFilter('include_irrelevant', e.target.checked ? 'true' : '')}
+            className="rounded"
+          />
+          무관 기사 포함
+        </label>
         <button
           onClick={() => downloadExcel(filters)}
           className="ml-auto bg-[var(--color-navy)] text-white text-sm px-4 py-1.5 rounded hover:opacity-90"
@@ -121,6 +142,7 @@ export default function AnalysisList() {
                     <th className="px-4 py-2">적합도</th>
                     <th className="px-4 py-2">기사 제목</th>
                     <th className="px-4 py-2">분야</th>
+                    <th className="px-4 py-2">피해자</th>
                     <th className="px-4 py-2">상대방</th>
                     <th className="px-4 py-2">피해액</th>
                     <th className="px-4 py-2">단계</th>
@@ -130,14 +152,22 @@ export default function AnalysisList() {
                 </thead>
                 <tbody>
                   {data?.results.map((a) => (
-                    <tr key={a.id} className="border-b last:border-0 hover:bg-[#F8FAFC] cursor-pointer">
+                    <tr key={a.id} className={`border-b last:border-0 hover:bg-[#F8FAFC] cursor-pointer ${!a.is_relevant ? 'opacity-50 bg-gray-50' : ''}`}>
                       <td className="px-4 py-2.5"><SuitabilityBadge value={a.suitability} /></td>
                       <td className="px-4 py-2.5 max-w-xs">
-                        <Link to={`/analyses/${a.id}`} className="hover:text-blue-600 line-clamp-1">
-                          {a.article_title}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <Link to={`/analyses/${a.id}`} className="hover:text-blue-600 line-clamp-1">
+                            {a.article_title}
+                          </Link>
+                          {(a.related_count ?? 0) > 1 && (
+                            <span className="shrink-0 text-[11px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">
+                              +{(a.related_count ?? 0) - 1}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">{a.case_category}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{a.victim_count || '-'}</td>
                       <td className="px-4 py-2.5 text-gray-600">{a.defendant || '-'}</td>
                       <td className="px-4 py-2.5 text-gray-600">{a.damage_amount || '-'}</td>
                       <td className="px-4 py-2.5"><StageBadge value={a.stage} /></td>
@@ -146,7 +176,7 @@ export default function AnalysisList() {
                     </tr>
                   ))}
                   {data?.results.length === 0 && (
-                    <tr><td colSpan={8} className="py-8 text-center text-gray-400">결과가 없습니다</td></tr>
+                    <tr><td colSpan={9} className="py-8 text-center text-gray-400">결과가 없습니다</td></tr>
                   )}
                 </tbody>
               </table>

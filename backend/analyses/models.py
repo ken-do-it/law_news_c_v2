@@ -94,6 +94,14 @@ class Analysis(models.Model):
     stage_detail = models.CharField("진행 단계 상세", max_length=200, blank=True, default="")
     summary = models.TextField("요약")
 
+    # 법적 분쟁 관련 여부 (LLM이 판단)
+    is_relevant = models.BooleanField(
+        "법적 분쟁 관련",
+        default=True,
+        db_index=True,
+        help_text="법적 분쟁/소송과 관련 없는 기사는 False",
+    )
+
     # LLM 메타 정보
     llm_model = models.CharField("사용 모델", max_length=50, default="gpt-4o")
     prompt_tokens = models.IntegerField("프롬프트 토큰", default=0)
