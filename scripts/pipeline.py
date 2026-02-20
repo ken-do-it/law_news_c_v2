@@ -1,8 +1,8 @@
 """수집 → 분석 전체 파이프라인 (Celery 없이 동기 실행)"""
-import sys, os, io, time, django
+import sys, os, time, django
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()

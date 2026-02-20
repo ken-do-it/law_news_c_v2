@@ -49,26 +49,30 @@ def call_openai(messages: list[dict]) -> tuple[str, int, int]:
 
 
 def call_gemini(messages: list[dict]) -> tuple[str, int, int]:
-    """Gemini API 호출 (대체 LLM)"""
-    import google.generativeai as genai
+    """Gemini API 호출 (기본 LLM) — google-genai SDK"""
+    from google import genai
 
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    # 메시지를 Gemini 형식으로 변환
     prompt_parts = []
     for msg in messages:
         prompt_parts.append(f"[{msg['role']}]: {msg['content']}")
 
-    response = model.generate_content(
-        "\n\n".join(prompt_parts),
-        generation_config=genai.types.GenerationConfig(
-            temperature=settings.LLM_TEMPERATURE,
-            max_output_tokens=settings.LLM_MAX_TOKENS,
-            response_mime_type="application/json",
-        ),
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents="\n\n".join(prompt_parts),
+        config={
+            "temperature": settings.LLM_TEMPERATURE,
+            "max_output_tokens": settings.LLM_MAX_TOKENS,
+            "response_mime_type": "application/json",
+        },
     )
-    return response.text, 0, 0
+    usage = response.usage_metadata
+    return (
+        response.text,
+        usage.prompt_token_count if usage else 0,
+        usage.candidates_token_count if usage else 0,
+    )
 
 
 def get_existing_case_names() -> list[str]:
@@ -145,6 +149,11 @@ def find_or_create_case_group(case_name: str) -> CaseGroup | None:
 
 def analyze_single_article(article: Article) -> bool:
     """단일 기사 분석 → 성공 여부 반환"""
+    if Analysis.objects.filter(article=article).exists():
+        article.status = "analyzed"
+        article.save(update_fields=["status"])
+        return True
+
     article.status = "analyzing"
     article.save(update_fields=["status"])
 
@@ -152,16 +161,16 @@ def analyze_single_article(article: Article) -> bool:
     existing_case_names = get_existing_case_names()
     messages = build_messages(article.title, article.content, existing_case_names)
 
-    # .env에 설정된 API 키에 따라 주(primary)/부(fallback) LLM 자동 결정
-    has_openai = bool(getattr(settings, "OPENAI_API_KEY", ""))
+    # Gemini 우선, OpenAI 폴백
     has_gemini = bool(getattr(settings, "GEMINI_API_KEY", ""))
+    has_openai = bool(getattr(settings, "OPENAI_API_KEY", ""))
 
-    if has_openai:
-        primary, fallback = call_openai, (call_gemini if has_gemini else None)
-        primary_name, fallback_name = "OpenAI", "Gemini"
-    elif has_gemini:
-        primary, fallback = call_gemini, None
-        primary_name, fallback_name = "Gemini", None
+    if has_gemini:
+        primary, fallback = call_gemini, (call_openai if has_openai else None)
+        primary_name, fallback_name = "Gemini", "OpenAI"
+    elif has_openai:
+        primary, fallback = call_openai, None
+        primary_name, fallback_name = "OpenAI", None
     else:
         logger.error("LLM API 키가 설정되지 않음 (OPENAI_API_KEY 또는 GEMINI_API_KEY)")
         article.status = "failed"
@@ -198,22 +207,26 @@ def analyze_single_article(article: Article) -> bool:
     # 사건 그룹 연결
     case_group = find_or_create_case_group(parsed.get("case_name", ""))
 
-    Analysis.objects.create(
+    used_model = settings.GEMINI_MODEL if primary == call_gemini else settings.LLM_MODEL
+
+    Analysis.objects.update_or_create(
         article=article,
-        case_group=case_group,
-        suitability=parsed["suitability"],
-        suitability_reason=parsed["suitability_reason"],
-        case_category=parsed["case_category"],
-        defendant=parsed.get("defendant", ""),
-        damage_amount=parsed.get("damage_amount", "미상"),
-        victim_count=parsed.get("victim_count", "미상"),
-        stage=parsed.get("stage", ""),
-        stage_detail=parsed.get("stage_detail", ""),
-        summary=parsed["summary"],
-        is_relevant=parsed.get("is_relevant", True),
-        llm_model=settings.LLM_MODEL,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
+        defaults=dict(
+            case_group=case_group,
+            suitability=parsed["suitability"],
+            suitability_reason=parsed["suitability_reason"],
+            case_category=parsed["case_category"],
+            defendant=parsed.get("defendant", ""),
+            damage_amount=parsed.get("damage_amount", "미상"),
+            victim_count=parsed.get("victim_count", "미상"),
+            stage=parsed.get("stage", ""),
+            stage_detail=parsed.get("stage_detail", ""),
+            summary=parsed["summary"],
+            is_relevant=parsed.get("is_relevant", True),
+            llm_model=used_model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        ),
     )
 
     article.status = "analyzed"
@@ -223,8 +236,8 @@ def analyze_single_article(article: Article) -> bool:
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def analyze_pending_articles(self):
-    """분석 대기(pending) 상태의 기사를 일괄 분석"""
-    pending = Article.objects.filter(status="pending").order_by("collected_at")
+    """분석 대기(pending/analyzing) 상태의 기사를 일괄 분석"""
+    pending = Article.objects.filter(status__in=["pending", "analyzing"]).order_by("collected_at")
     total = pending.count()
     success = 0
     failed = 0

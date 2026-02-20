@@ -4,6 +4,8 @@
 
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
+export PYTHONIOENCODING := "utf-8"
+
 manage := "uv run python backend/manage.py"
 
 # ── 기본: 사용 가능한 명령어 목록 ─────────────────────────
@@ -14,6 +16,7 @@ default:
 # ============================================================
 #  서버
 # ============================================================
+
 
 [doc("백엔드 + 프론트엔드 동시 실행")]
 dev:
@@ -154,3 +157,4 @@ admin:
 [doc("엑셀 내보내기")]
 export:
     uv run python scripts/export_excel.py
+
