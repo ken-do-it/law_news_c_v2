@@ -165,3 +165,20 @@ NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")
 # ---------------------------------------------------------------------------
 CRAWL_INTERVAL_MINUTES = int(os.getenv("CRAWL_INTERVAL_MINUTES", "60"))
 NEWS_KEYWORDS = os.getenv("NEWS_KEYWORDS", "소송,손해배상,집단소송,공동소송,피해자,피해보상,피해구제")
+
+# If True, scheduler enqueues Celery tasks. If False, it runs sync pipeline.
+USE_CELERY_PIPELINE = os.getenv("USE_CELERY_PIPELINE", "False").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
+# ---------------------------------------------------------------------------
+# Runserver Auto Pipeline (APScheduler)
+# ---------------------------------------------------------------------------
+# Automatically run crawl -> analyze loop when runserver starts (without Celery)
+ENABLE_PIPELINE_ON_RUNSERVER = os.getenv(
+    "ENABLE_PIPELINE_ON_RUNSERVER", "True"
+).lower() in ("true", "1", "yes")
+
+PIPELINE_INTERVAL_MINUTES = int(os.getenv("PIPELINE_INTERVAL_MINUTES", "60"))

@@ -1,9 +1,8 @@
-"""LLM 분석 Celery 태스크"""
+﻿"""LLM 분석 Celery 태스크 (Celery 제외 및 Gemini 강제 버전)"""
 
 import logging
 from difflib import SequenceMatcher
 
-from celery import shared_task
 from django.conf import settings
 from django.db.models import Count, Q
 
@@ -28,7 +27,8 @@ _CASE_STOPWORDS = {
 
 
 def call_openai(messages: list[dict]) -> tuple[str, int, int]:
-    """OpenAI GPT-4o API 호출 → (응답텍스트, prompt_tokens, completion_tokens)"""
+    """OpenAI GPT API 호출"""
+    # 사용하지 않더라도 혹시 모를 호출에 대비해 남겨둠 (실제 호출되면 안 됨)
     from openai import OpenAI
 
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -49,35 +49,50 @@ def call_openai(messages: list[dict]) -> tuple[str, int, int]:
 
 
 def call_gemini(messages: list[dict]) -> tuple[str, int, int]:
-    """Gemini API 호출 (대체 LLM)"""
-    import google.generativeai as genai
+    """Gemini API 호출 (google.genai SDK, JSON 안정화 재시도 포함)."""
+    from google import genai
+    from google.genai import types
 
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model_name = "gemini-2.5-flash"
 
-    # 메시지를 Gemini 형식으로 변환
-    prompt_parts = []
-    for msg in messages:
-        prompt_parts.append(f"[{msg['role']}]: {msg['content']}")
-
-    response = model.generate_content(
-        "\n\n".join(prompt_parts),
-        generation_config=genai.types.GenerationConfig(
-            temperature=settings.LLM_TEMPERATURE,
-            max_output_tokens=settings.LLM_MAX_TOKENS,
-            response_mime_type="application/json",
-        ),
+    base_prompt = "\n\n".join(f"[{m['role']}]: {m['content']}" for m in messages)
+    retry_suffix = (
+        "\n\nIMPORTANT: Return ONLY a valid JSON object. "
+        "Do not include markdown fences, comments, or extra text."
     )
-    return response.text, 0, 0
+
+    last_text = ""
+    for attempt in range(2):
+        prompt = base_prompt if attempt == 0 else base_prompt + retry_suffix
+
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=settings.LLM_TEMPERATURE,
+                response_mime_type="application/json",
+                # max_output_tokens 미설정 → 모델 기본값 사용 (Gemini는 충분히 큼)
+            ),
+        )
+
+        text = (response.text or "").strip()
+        last_text = text
+
+        # 1차 필터: JSON object 형태 흔적이 있으면 반환 (정밀 파싱은 validator에서 수행)
+        if "{" in text and "}" in text:
+            return text, 0, 0
+
+        logger.warning("Gemini JSON 형태 미충족, 재시도 예정: attempt=%d", attempt + 1)
+
+    return last_text, 0, 0
 
 
 def get_existing_case_names() -> list[str]:
-    """활성 사건 그룹 이름 목록 조회 (is_relevant=True 기사가 있는 그룹만)"""
+    """활성 사건 그룹 이름 목록 조회 (is_relevant=True 기사가 있는 그룹만)."""
     groups = (
         CaseGroup.objects.annotate(
-            relevant_count=Count(
-                "analyses", filter=Q(analyses__is_relevant=True)
-            )
+            relevant_count=Count("analyses", filter=Q(analyses__is_relevant=True))
         )
         .filter(relevant_count__gt=0)
         .values_list("name", flat=True)
@@ -86,20 +101,17 @@ def get_existing_case_names() -> list[str]:
 
 
 def _case_similarity(a: str, b: str) -> float:
-    """핵심 엔티티 기반 사건명 유사도 (stopword 제외)"""
+    """핵심 엔티티 기반 사건명 유사도 (stopword 제외)."""
     seq_ratio = SequenceMatcher(None, a, b).ratio()
 
-    # 의미있는 토큰 추출 (stopword 제외, 2자 이상)
     tokens_a = {t for t in a.split() if len(t) >= 2 and t not in _CASE_STOPWORDS}
     tokens_b = {t for t in b.split() if len(t) >= 2 and t not in _CASE_STOPWORDS}
 
-    # 핵심 토큰(엔티티) 공유 여부
     shared = tokens_a & tokens_b
     if shared:
         bonus = min(len(shared) * 0.25, 0.5)
         return min(seq_ratio + bonus, 1.0)
 
-    # 부분 문자열 매칭: 핵심 엔티티(3자 이상)가 상대 문자열에 포함?
     for t in tokens_a:
         if len(t) >= 3 and t in b:
             return min(seq_ratio + 0.25, 1.0)
@@ -111,16 +123,14 @@ def _case_similarity(a: str, b: str) -> float:
 
 
 def find_or_create_case_group(case_name: str) -> CaseGroup | None:
-    """사건명으로 기존 CaseGroup을 찾거나 유사도 매칭 후 새로 생성"""
+    """사건명으로 기존 CaseGroup을 찾거나 유사도 매칭 후 새로 생성."""
     if not case_name:
         return None
 
-    # 1) 정확히 일치하는 그룹
     existing = CaseGroup.objects.filter(name=case_name).first()
     if existing:
         return existing
 
-    # 2) 유사도 매칭 — 기존 그룹명과 비교
     best_match = None
     best_ratio = 0.0
     for group in CaseGroup.objects.all():
@@ -131,39 +141,31 @@ def find_or_create_case_group(case_name: str) -> CaseGroup | None:
 
     if best_match and best_ratio >= CASE_SIMILARITY_THRESHOLD:
         logger.info(
-            "사건 그룹 유사도 매칭: '%s' → '%s' (%.2f)",
+            "사건 그룹 유사도 매칭: '%s' -> '%s' (%.2f)",
             case_name,
             best_match.name,
             best_ratio,
         )
         return best_match
 
-    # 3) 새 그룹 생성
     case_id = CaseGroup.generate_next_case_id()
     return CaseGroup.objects.create(case_id=case_id, name=case_name)
 
 
 def analyze_single_article(article: Article) -> bool:
-    """단일 기사 분석 → 성공 여부 반환"""
+    """단일 기사 분석 -> 성공 여부 반환."""
     article.status = "analyzing"
     article.save(update_fields=["status"])
 
-    # 기존 사건 그룹 목록을 프롬프트에 주입
     existing_case_names = get_existing_case_names()
     messages = build_messages(article.title, article.content, existing_case_names)
 
-    # .env에 설정된 API 키에 따라 주(primary)/부(fallback) LLM 자동 결정
-    has_openai = bool(getattr(settings, "OPENAI_API_KEY", ""))
-    has_gemini = bool(getattr(settings, "GEMINI_API_KEY", ""))
+    # Force Gemini usage (ignore OpenAI key check for priority)
+    primary = call_gemini
+    primary_name = "Gemini"
 
-    if has_openai:
-        primary, fallback = call_openai, (call_gemini if has_gemini else None)
-        primary_name, fallback_name = "OpenAI", "Gemini"
-    elif has_gemini:
-        primary, fallback = call_gemini, None
-        primary_name, fallback_name = "Gemini", None
-    else:
-        logger.error("LLM API 키가 설정되지 않음 (OPENAI_API_KEY 또는 GEMINI_API_KEY)")
+    if not getattr(settings, "GEMINI_API_KEY", ""):
+        logger.error("GEMINI_API_KEY가 설정되지 않았습니다.")
         article.status = "failed"
         article.retry_count += 1
         article.save(update_fields=["status", "retry_count"])
@@ -173,20 +175,10 @@ def analyze_single_article(article: Article) -> bool:
         raw_response, prompt_tokens, completion_tokens = primary(messages)
     except Exception:
         logger.exception("%s API 호출 실패: article=%d", primary_name, article.pk)
-        if fallback:
-            try:
-                raw_response, prompt_tokens, completion_tokens = fallback(messages)
-            except Exception:
-                logger.exception("%s API도 실패: article=%d", fallback_name, article.pk)
-                article.status = "failed"
-                article.retry_count += 1
-                article.save(update_fields=["status", "retry_count"])
-                return False
-        else:
-            article.status = "failed"
-            article.retry_count += 1
-            article.save(update_fields=["status", "retry_count"])
-            return False
+        article.status = "failed"
+        article.retry_count += 1
+        article.save(update_fields=["status", "retry_count"])
+        return False
 
     parsed = validate_and_parse(raw_response)
     if not parsed:
@@ -195,7 +187,6 @@ def analyze_single_article(article: Article) -> bool:
         article.save(update_fields=["status", "retry_count"])
         return False
 
-    # 사건 그룹 연결
     case_group = find_or_create_case_group(parsed.get("case_name", ""))
 
     Analysis.objects.create(
@@ -221,9 +212,8 @@ def analyze_single_article(article: Article) -> bool:
     return True
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def analyze_pending_articles(self):
-    """분석 대기(pending) 상태의 기사를 일괄 분석"""
+def analyze_pending_articles(self=None):
+    """분석 대기(pending) 상태의 기사를 일괄 분석."""
     pending = Article.objects.filter(status="pending").order_by("collected_at")
     total = pending.count()
     success = 0
@@ -239,16 +229,14 @@ def analyze_pending_articles(self):
     return {"total": total, "success": success, "failed": failed}
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def reanalyze_article(self, article_id: int):
-    """특정 기사 재분석"""
+def reanalyze_article(article_id: int):
+    """특정 기사 재분석."""
     try:
         article = Article.objects.get(pk=article_id)
     except Article.DoesNotExist:
         logger.error("기사를 찾을 수 없음: %d", article_id)
         return False
 
-    # 기존 분석 결과 삭제
     Analysis.objects.filter(article=article).delete()
     article.status = "pending"
     article.save(update_fields=["status"])

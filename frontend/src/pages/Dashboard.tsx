@@ -35,11 +35,13 @@ export default function Dashboard() {
       </div>
 
       {/* 통계 카드 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatsCard icon="📰" label="오늘 수집" value={stats.today_collected} sub="건" />
-        <StatsCard icon="✅" label="분석 완료" value={stats.total_analyzed} sub="전체" />
-        <StatsCard icon="🔴" label="High 적합" value={stats.today_high} sub="건" />
-        <StatsCard icon="🟠" label="Medium 적합" value={stats.today_medium} sub="건" />
+        <StatsCard icon="⏳" label="분석 대기" value={stats.pending_count} sub="건" />
+        <StatsCard icon="✅" label="오늘 분석 완료" value={stats.today_analyzed} sub="건" />
+        <StatsCard icon="📊" label="누적 분석 완료" value={stats.total_analyzed} sub="전체" />
+        <StatsCard icon="🔴" label="High 적합" value={stats.today_high} sub="오늘" />
+        <StatsCard icon="🟠" label="Medium 적합" value={stats.today_medium} sub="오늘" />
       </div>
 
       {/* 차트 */}

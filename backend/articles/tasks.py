@@ -1,8 +1,8 @@
-"""크롤링 Celery 태스크"""
+﻿"""크롤링 Celery 태스크 → 일반 함수로 변경됨"""
 
 import logging
 
-from celery import shared_task
+from django.conf import settings
 from django.db import IntegrityError
 
 from articles.crawlers import (
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_source(original_link: str, naver_link: str) -> MediaSource | None:
-    """originallink 도메인 → 네이버 뉴스 페이지 순으로 언론사를 매칭"""
+    """originallink 도메인 -> 네이버 뉴스 페이지 순으로 언론사를 매칭"""
     # 1) URL 도메인 매핑
     name = extract_source_from_url(original_link)
     if name:
@@ -36,8 +36,7 @@ def _resolve_source(original_link: str, naver_link: str) -> MediaSource | None:
     return None
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def crawl_news(self):
+def crawl_news(self=None):
     """활성화된 키워드로 네이버 뉴스를 검색하고 DB에 저장"""
     keywords = Keyword.objects.filter(is_active=True)
     total_new = 0
@@ -71,7 +70,7 @@ def crawl_news(self):
             if not content:
                 content = description
 
-            # 언론사 매칭: originallink 도메인 → 네이버 페이지 순
+            # 언론사 매칭: originallink 도메인 -> 네이버 페이지 순
             source = _resolve_source(original_link, naver_link)
 
             try:
@@ -90,19 +89,17 @@ def crawl_news(self):
 
     logger.info("크롤링 완료: 총 %d건 신규 수집", total_new)
 
-    # 분석 태스크 자동 트리거
+    # 분석 태스크 자동 트리거 (동기 실행)
     if total_new > 0:
         try:
             from analyses.tasks import analyze_pending_articles
-
-            analyze_pending_articles.delay()
+            analyze_pending_articles()
         except Exception:
             logger.exception("분석 태스크 트리거 실패")
 
     return total_new
 
 
-@shared_task
 def crawl_news_sync():
-    """동기식 크롤링 (테스트/수동 실행용) — Celery 없이 직접 호출"""
+    """동기식 크롤링 (호환성 유지용)"""
     return crawl_news()

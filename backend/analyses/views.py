@@ -212,7 +212,14 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             suitability="Medium",
         ).count()
 
-        # ── 3. 전체 분석 완료 건수 ──
+        # ── 3. 분석 대기 건수 (status=pending 또는 analyzing) ──
+        from articles.models import Article as ArticleModel  # 이미 위에서 import됨
+        pending_count = Article.objects.filter(status__in=["pending", "analyzing"]).count()
+
+        # ── 3-1. 오늘 분석 완료 건수 ──
+        today_analyzed = Analysis.objects.filter(analyzed_at__date=today).count()
+
+        # ── 3-2. 누적 분석 완료 건수 ──
         total_analyzed = Analysis.objects.count()
 
         # ── 4. 이번 달 LLM 비용 추정 (GPT-4o 기준) ──
@@ -272,9 +279,11 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         # 모든 통계 데이터를 JSON으로 반환
         return Response({
             "today_collected": today_collected,
+            "pending_count": pending_count,
+            "today_analyzed": today_analyzed,
+            "total_analyzed": total_analyzed,
             "today_high": today_high,
             "today_medium": today_medium,
-            "total_analyzed": total_analyzed,
             "monthly_cost": monthly_cost,
             "suitability_distribution": suitability_distribution,
             "category_distribution": category_distribution,
