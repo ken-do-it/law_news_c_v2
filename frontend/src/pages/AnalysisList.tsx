@@ -58,7 +58,7 @@ export default function AnalysisList() {
       <h1 className="text-2xl font-bold">분석 목록</h1>
 
       {/* 필터 바 */}
-      <div className="bg-white rounded-xl border border-[var(--color-border)] p-4 flex flex-wrap gap-3 items-end">
+      <div className="bg-white rounded-xl border border-border p-4 flex flex-wrap gap-3 items-end">
         <div>
           <label className="block text-xs text-gray-500 mb-1">검색</label>
           <input
@@ -120,14 +120,14 @@ export default function AnalysisList() {
         </label>
         <button
           onClick={() => downloadExcel(filters)}
-          className="ml-auto bg-[var(--color-navy)] text-white text-sm px-4 py-1.5 rounded hover:opacity-90"
+          className="ml-auto bg-navy text-white text-sm px-4 py-1.5 rounded hover:opacity-90"
         >
           📥 엑셀 다운로드
         </button>
       </div>
 
       {/* 테이블 */}
-      <div className="bg-white rounded-xl border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">로딩 중...</div>
         ) : (
@@ -191,7 +191,7 @@ export default function AnalysisList() {
                     onClick={() => setPage(p)}
                     className={`px-3 py-1 text-sm rounded ${
                       p === currentPage
-                        ? 'bg-[var(--color-navy)] text-white'
+                        ? 'bg-navy text-white'
                         : 'hover:bg-gray-100'
                     }`}
                   >
