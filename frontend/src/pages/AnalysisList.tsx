@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getAnalyses, downloadExcel, type AnalysisFilters } from '../lib/api';
 import type { Analysis, PaginatedResponse } from '../lib/types';
@@ -10,7 +10,7 @@ export default function AnalysisList() {
   const [data, setData] = useState<PaginatedResponse<Analysis> | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const filters: AnalysisFilters = {
+  const filters = useMemo<AnalysisFilters>(() => ({
     suitability: searchParams.get('suitability') || undefined,
     case_category: searchParams.get('case_category') || undefined,
     stage: searchParams.get('stage') || undefined,
@@ -19,7 +19,7 @@ export default function AnalysisList() {
     page: Number(searchParams.get('page')) || 1,
     include_irrelevant: searchParams.get('include_irrelevant') || undefined,
     group_by_case: searchParams.get('group_by_case') !== 'false' ? 'true' : undefined,
-  };
+  }), [searchParams]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -29,7 +29,7 @@ export default function AnalysisList() {
     } finally {
       setLoading(false);
     }
-  }, [searchParams.toString()]);
+  }, [filters]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

@@ -59,7 +59,7 @@ export default function AnalysisDetail() {
             </div>
             <h1 className="text-xl font-bold mb-2">{article?.title}</h1>
             <div className="flex items-center gap-3 text-sm text-gray-500">
-              <span>{article?.source?.name || article?.source_name}</span>
+              <span>{article?.source_name}</span>
               <span>|</span>
               <span>{article?.published_at?.slice(0, 10)}</span>
               {article?.url && (
