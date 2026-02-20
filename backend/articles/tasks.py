@@ -36,7 +36,7 @@ def _resolve_source(original_link: str, naver_link: str) -> MediaSource | None:
     return None
 
 
-def crawl_news(self=None):
+def crawl_news():
     """활성화된 키워드로 네이버 뉴스를 검색하고 DB에 저장"""
     keywords = Keyword.objects.filter(is_active=True)
     total_new = 0
@@ -98,8 +98,3 @@ def crawl_news(self=None):
             logger.exception("분석 태스크 트리거 실패")
 
     return total_new
-
-
-def crawl_news_sync():
-    """동기식 크롤링 (호환성 유지용)"""
-    return crawl_news()

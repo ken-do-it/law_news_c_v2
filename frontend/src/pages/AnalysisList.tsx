@@ -26,6 +26,8 @@ export default function AnalysisList() {
     try {
       const result = await getAnalyses(filters);
       setData(result);
+    } catch {
+      console.error('분석 데이터 불러오기 실패');
     } finally {
       setLoading(false);
     }
@@ -104,7 +106,7 @@ export default function AnalysisList() {
           <input
             type="checkbox"
             checked={searchParams.get('group_by_case') !== 'false'}
-            onChange={(e) => setFilter('group_by_case', e.target.checked ? '' : 'false')}
+            onChange={(e) => setFilter('group_by_case', e.target.checked ? 'true' : 'false')}
             className="rounded"
           />
           사건별 묶기

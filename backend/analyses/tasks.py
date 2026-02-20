@@ -1,4 +1,4 @@
-﻿"""LLM 분석 Celery 태스크 (Celery 제외 및 Gemini 강제 버전)"""
+"""LLM 분석 태스크 (Gemini 전용)"""
 
 import logging
 from difflib import SequenceMatcher
@@ -26,29 +26,7 @@ _CASE_STOPWORDS = {
 }
 
 
-def call_openai(messages: list[dict]) -> tuple[str, int, int]:
-    """OpenAI GPT API 호출"""
-    # 사용하지 않더라도 혹시 모를 호출에 대비해 남겨둠 (실제 호출되면 안 됨)
-    from openai import OpenAI
-
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model=settings.LLM_MODEL,
-        messages=messages,
-        temperature=settings.LLM_TEMPERATURE,
-        max_tokens=settings.LLM_MAX_TOKENS,
-        response_format={"type": "json_object"},
-    )
-    choice = response.choices[0]
-    usage = response.usage
-    return (
-        choice.message.content,
-        usage.prompt_tokens if usage else 0,
-        usage.completion_tokens if usage else 0,
-    )
-
-
-def call_gemini(messages: list[dict]) -> tuple[str, int, int]:
+def call_gemini(messages: list[dict]) -> tuple[str, int, int, str]:
     """Gemini API 호출 (google.genai SDK, JSON 안정화 재시도 포함)."""
     from google import genai
     from google.genai import types
@@ -81,11 +59,11 @@ def call_gemini(messages: list[dict]) -> tuple[str, int, int]:
 
         # 1차 필터: JSON object 형태 흔적이 있으면 반환 (정밀 파싱은 validator에서 수행)
         if "{" in text and "}" in text:
-            return text, 0, 0
+            return text, 0, 0, model_name
 
         logger.warning("Gemini JSON 형태 미충족, 재시도 예정: attempt=%d", attempt + 1)
 
-    return last_text, 0, 0
+    return last_text, 0, 0, model_name
 
 
 def get_existing_case_names() -> list[str]:
@@ -157,13 +135,6 @@ def analyze_single_article(article: Article) -> bool:
     article.status = "analyzing"
     article.save(update_fields=["status"])
 
-    existing_case_names = get_existing_case_names()
-    messages = build_messages(article.title, article.content, existing_case_names)
-
-    # Force Gemini usage (ignore OpenAI key check for priority)
-    primary = call_gemini
-    primary_name = "Gemini"
-
     if not getattr(settings, "GEMINI_API_KEY", ""):
         logger.error("GEMINI_API_KEY가 설정되지 않았습니다.")
         article.status = "failed"
@@ -171,10 +142,13 @@ def analyze_single_article(article: Article) -> bool:
         article.save(update_fields=["status", "retry_count"])
         return False
 
+    existing_case_names = get_existing_case_names()
+    messages = build_messages(article.title, article.content, existing_case_names)
+
     try:
-        raw_response, prompt_tokens, completion_tokens = primary(messages)
+        raw_response, prompt_tokens, completion_tokens, llm_model_name = call_gemini(messages)
     except Exception:
-        logger.exception("%s API 호출 실패: article=%d", primary_name, article.pk)
+        logger.exception("Gemini API 호출 실패: article=%d", article.pk)
         article.status = "failed"
         article.retry_count += 1
         article.save(update_fields=["status", "retry_count"])
@@ -202,7 +176,7 @@ def analyze_single_article(article: Article) -> bool:
         stage_detail=parsed.get("stage_detail", ""),
         summary=parsed["summary"],
         is_relevant=parsed.get("is_relevant", True),
-        llm_model=settings.LLM_MODEL,
+        llm_model=llm_model_name,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
     )
@@ -212,9 +186,11 @@ def analyze_single_article(article: Article) -> bool:
     return True
 
 
-def analyze_pending_articles(self=None):
-    """분석 대기(pending) 상태의 기사를 일괄 분석."""
-    pending = Article.objects.filter(status="pending").order_by("collected_at")
+def analyze_pending_articles():
+    """분석 대기(pending) 상태의 기사를 일괄 분석 (retry_count < 3인 기사만)."""
+    pending = Article.objects.filter(
+        status="pending", retry_count__lt=3
+    ).order_by("collected_at")
     total = pending.count()
     success = 0
     failed = 0
@@ -239,6 +215,7 @@ def reanalyze_article(article_id: int):
 
     Analysis.objects.filter(article=article).delete()
     article.status = "pending"
-    article.save(update_fields=["status"])
+    article.retry_count = 0
+    article.save(update_fields=["status", "retry_count"])
 
     return analyze_single_article(article)

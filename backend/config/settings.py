@@ -136,23 +136,11 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Celery
-# ---------------------------------------------------------------------------
-CELERY_BROKER_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "Asia/Seoul"
-
-# ---------------------------------------------------------------------------
 # LLM API
 # ---------------------------------------------------------------------------
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
-LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1000"))
 
 # ---------------------------------------------------------------------------
 # Naver News API
@@ -165,13 +153,6 @@ NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")
 # ---------------------------------------------------------------------------
 CRAWL_INTERVAL_MINUTES = int(os.getenv("CRAWL_INTERVAL_MINUTES", "60"))
 NEWS_KEYWORDS = os.getenv("NEWS_KEYWORDS", "소송,손해배상,집단소송,공동소송,피해자,피해보상,피해구제")
-
-# If True, scheduler enqueues Celery tasks. If False, it runs sync pipeline.
-USE_CELERY_PIPELINE = os.getenv("USE_CELERY_PIPELINE", "False").lower() in (
-    "true",
-    "1",
-    "yes",
-)
 
 # ---------------------------------------------------------------------------
 # Runserver Auto Pipeline (APScheduler)

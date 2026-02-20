@@ -3,6 +3,7 @@
 import logging
 import re
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from html import unescape
 from urllib.parse import urlparse
 
@@ -66,7 +67,6 @@ DOMAIN_TO_SOURCE = {
     "www.kwnews.co.kr": "강원일보",
     "www.kyeonggi.com": "경기일보",
     "sbsfune.sbs.co.kr": "SBS Biz",
-    "www.hankyung.com": "한국경제",
     "koreajoongangdaily.joins.com": "코리아중앙데일리",
     "www.koreaherald.com": "코리아헤럴드",
     "www.newstapa.org": "뉴스타파",
@@ -117,8 +117,6 @@ def clean_html(text: str) -> str:
 def parse_naver_date(date_str: str) -> datetime:
     """네이버 API 날짜 포맷 파싱 (RFC 822)"""
     try:
-        from email.utils import parsedate_to_datetime
-
         return parsedate_to_datetime(date_str)
     except Exception:
         return datetime.now(tz=timezone.utc)

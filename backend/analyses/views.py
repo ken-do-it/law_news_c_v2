@@ -213,7 +213,6 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         ).count()
 
         # ── 3. 분석 대기 건수 (status=pending 또는 analyzing) ──
-        from articles.models import Article as ArticleModel  # 이미 위에서 import됨
         pending_count = Article.objects.filter(status__in=["pending", "analyzing"]).count()
 
         # ── 3-1. 오늘 분석 완료 건수 ──
@@ -222,19 +221,16 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         # ── 3-2. 누적 분석 완료 건수 ──
         total_analyzed = Analysis.objects.count()
 
-        # ── 4. 이번 달 LLM 비용 추정 (GPT-4o 기준) ──
-        # 이번 달에 분석된 모든 건의 토큰 합계를 집계
+        # ── 4. 이번 달 LLM 비용 추정 (Gemini는 토큰을 기록하지 않으므로 항상 0원) ──
         monthly_tokens = Analysis.objects.filter(
             analyzed_at__month=today.month,
             analyzed_at__year=today.year,
         ).aggregate(
-            total_prompt=Sum("prompt_tokens"),       # 입력 토큰 합계
-            total_completion=Sum("completion_tokens"),  # 출력 토큰 합계
+            total_prompt=Sum("prompt_tokens"),
+            total_completion=Sum("completion_tokens"),
         )
-        prompt_t = monthly_tokens["total_prompt"] or 0       # None 방지
+        prompt_t = monthly_tokens["total_prompt"] or 0
         completion_t = monthly_tokens["total_completion"] or 0
-        # GPT-4o 가격: 입력 $2.50/1M tokens, 출력 $10.00/1M tokens
-        # 달러→원화 환산 (1달러 = 1,400원 기준)
         monthly_cost = round(
             (prompt_t * 2.5 / 1_000_000 + completion_t * 10.0 / 1_000_000) * 1400
         )

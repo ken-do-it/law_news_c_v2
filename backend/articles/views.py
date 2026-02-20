@@ -1,3 +1,5 @@
+import threading
+
 from django_filters import rest_framework as filters
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -38,7 +40,7 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
         article = self.get_object()
         from analyses.tasks import reanalyze_article
 
-        reanalyze_article.delay(article.pk)
+        threading.Thread(target=reanalyze_article, args=(article.pk,)).start()
         return Response({"detail": "재분석 요청이 접수되었습니다."}, status=status.HTTP_202_ACCEPTED)
 
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getAnalysis, reanalyze, downloadExcel } from '../lib/api';
 import type { Analysis } from '../lib/types';
@@ -15,11 +16,17 @@ export default function AnalysisDetail() {
   const { id } = useParams<{ id: string }>();
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (id) getAnalysis(Number(id)).then(setAnalysis);
+    if (id) {
+      getAnalysis(Number(id))
+        .then(setAnalysis)
+        .catch(() => setError('분석 데이터를 불러오지 못했습니다.'));
+    }
   }, [id]);
 
+  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
   if (!analysis) return <div className="p-8 text-center text-gray-400">로딩 중...</div>;
 
   const article = analysis.article;
@@ -180,7 +187,7 @@ export default function AnalysisDetail() {
   );
 }
 
-function DetailRow({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) {
+function DetailRow({ icon, label, value }: { icon: string; label: string; value: ReactNode }) {
   return (
     <div className="flex items-start gap-2">
       <span className="text-sm">{icon}</span>

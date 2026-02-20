@@ -15,6 +15,7 @@ export default function App() {
           <Route path="/analyses" element={<AnalysisList />} />
           <Route path="/analyses/:id" element={<AnalysisDetail />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<div className="p-8 text-center text-gray-500">404 - 페이지를 찾을 수 없습니다</div>} />
         </Routes>
       </div>
     </BrowserRouter>

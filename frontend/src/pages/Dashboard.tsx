@@ -21,8 +21,10 @@ export default function Dashboard() {
   const [recent, setRecent] = useState<Analysis[]>([]);
 
   useEffect(() => {
-    getStats().then(setStats);
-    getAnalyses({ ordering: '-analyzed_at' }).then((r) => setRecent(r.results.slice(0, 5)));
+    getStats().then(setStats).catch(console.error);
+    getAnalyses({ ordering: '-analyzed_at' })
+      .then((r) => setRecent(r.results.slice(0, 5)))
+      .catch(console.error);
   }, []);
 
   if (!stats) return <div className="p-8 text-center text-gray-400">로딩 중...</div>;

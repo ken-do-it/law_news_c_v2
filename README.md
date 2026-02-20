@@ -1,8 +1,466 @@
 # LawNGood AI 법률 뉴스 분석 시스템
 
+---
+
+## 초보자를 위한 완전 실행 가이드 (A-Z)
+
+> 처음 실행하는 분을 위해 순서대로 따라하면 됩니다.
+> 각 단계에서 오류가 나면 하단의 [트러블슈팅](#beginners-troubleshooting) 섹션을 확인하세요.
+
+---
+
+### 이 시스템이 하는 일 (한 줄 요약)
+
+```
+네이버 뉴스 자동 수집 → Gemini AI가 소송금융 적합도 판정 → 대시보드에서 확인
+```
+
+필요한 API 키는 딱 **2가지**입니다:
+- **네이버 검색 API** — 뉴스 기사 수집
+- **Google Gemini API** — AI 분석
+
+---
+
+### Step 1. 필수 프로그램 설치 확인
+
+아래 명령어를 터미널(명령 프롬프트 또는 PowerShell)에서 실행해 버전을 확인합니다.
+
+#### Python 확인 (3.12 이상 필요)
+
+```bash
+python --version
+```
+
+출력 예시: `Python 3.12.3`
+
+> **설치가 안 되어 있다면**: https://www.python.org/downloads/ 에서 다운로드
+>
+> **Windows 설치 시 중요**: 설치 화면 맨 아래 `Add Python to PATH` 체크박스를 **반드시 체크**하고 설치하세요. 체크하지 않으면 `python` 명령어가 인식되지 않습니다.
+
+#### Node.js 확인 (18 이상 필요)
+
+```bash
+node --version
+npm --version
+```
+
+출력 예시: `v20.11.0` / `10.2.4`
+
+> **설치가 안 되어 있다면**: https://nodejs.org/ 에서 LTS 버전 다운로드 후 설치
+
+---
+
+### Step 2. API 키 발급
+
+#### 2-A. 네이버 검색 API
+
+1. https://developers.naver.com/apps/ 접속 → 로그인
+2. **[Application 등록]** 클릭
+3. 애플리케이션 이름 입력 (예: `lawngood-test`)
+4. **사용 API** 에서 **검색** 선택
+5. **등록하기** → `Client ID`와 `Client Secret` 복사해 두기
+
+#### 2-B. Google Gemini API
+
+1. https://aistudio.google.com/apikey 접속 → Google 계정 로그인
+2. **[Create API key]** 클릭
+3. 생성된 API 키 복사해 두기
+
+---
+
+### Step 3. 프로젝트 폴더로 이동
+
+터미널에서 프로젝트 루트 폴더로 이동합니다.
+
+```bash
+# 예시 (본인 경로에 맞게 변경)
+cd C:\Users\사용자이름\Desktop\law_news_c_v2
+```
+
+이 폴더 안에 `backend/`, `frontend/`, `.env.example` 등이 있으면 정상입니다.
+
+---
+
+### Step 4. 환경변수 파일(.env) 설정
+
+```bash
+# 템플릿 복사 (Windows)
+copy .env.example .env
+```
+
+```bash
+# 템플릿 복사 (macOS/Linux)
+cp .env.example .env
+```
+
+`.env` 파일을 메모장이나 VSCode로 열어서 아래 항목을 실제 값으로 교체합니다:
+
+```env
+# ---- Django ----
+DJANGO_SECRET_KEY=아무-랜덤-문자열-50자-이상-입력  # 예: my-super-secret-key-abc123xyz
+
+# ---- 네이버 API ----
+NAVER_CLIENT_ID=Step2에서_복사한_Client_ID
+NAVER_CLIENT_SECRET=Step2에서_복사한_Client_Secret
+
+# ---- Gemini API ----
+GEMINI_API_KEY=Step2에서_복사한_Gemini_API_키
+
+# ---- 자동 파이프라인 설정 ----
+ENABLE_PIPELINE_ON_RUNSERVER=True   # 서버 시작 시 자동으로 크롤링+분석 실행
+PIPELINE_INTERVAL_MINUTES=60        # 60분마다 반복
+```
+
+> **나머지 항목은 건드리지 않아도 됩니다.** 기본값으로 동작합니다.
+
+---
+
+### Step 5. Python 가상환경 만들기
+
+가상환경은 이 프로젝트의 Python 패키지를 다른 프로젝트와 분리해 관리하는 공간입니다.
+
+```bash
+# 가상환경 생성
+python -m venv law_claude_venv2(가상환경 이름 변경가능)
+```
+
+```bash
+# 가상환경 활성화 (Windows CMD / PowerShell)
+law_claude_venv2\Scripts\activate
+```
+
+```bash
+# 가상환경 활성화 (macOS / Linux)
+source law_claude_venv2/bin/activate
+```
+
+활성화되면 터미널 앞에 `(law_claude_venv2)` 가 붙습니다.
+
+```
+(law_claude_venv2) C:\Users\...>
+```
+
+> **앞으로 모든 Python 명령어는 가상환경이 활성화된 상태에서 실행**해야 합니다.
+
+---
+
+### Step 6. Python 패키지 설치
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+설치에 수 분이 걸릴 수 있습니다. 마지막에 오류 없이 완료되면 다음 단계로 이동합니다.
+
+---
+
+### Step 7. 데이터베이스 초기화
+
+```bash
+# 테이블 생성 (데이터베이스 구조 적용)
+python backend/manage.py migrate
+```
+
+```bash
+# 초기 데이터 입력 (언론사 80개 + 검색 키워드 7개)
+python backend/manage.py seed_initial_data
+```
+
+---
+
+### Step 8. (선택) 관리자 계정 생성
+
+Django 관리자 페이지(http://localhost:8000/admin/)를 사용하려면 계정이 필요합니다.
+
+```bash
+python backend/manage.py createsuperuser
+```
+
+```
+Username: admin
+Email address: (비워도 됨, 엔터)
+Password: 원하는비밀번호
+Password (again): 동일하게입력
+```
+
+---
+
+### Step 9. 프론트엔드 패키지 설치
+
+**새 터미널 창**을 열거나, 기존 터미널에서 아래 명령어를 실행합니다.
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+설치에 1~3분 정도 걸립니다.
+
+---
+
+### Step 10. 서버 실행 (터미널 2개 필요)
+
+#### 터미널 1: 백엔드 서버
+
+가상환경이 활성화된 터미널에서 실행합니다.
+
+```bash
+python backend/manage.py runserver
+```
+
+아래와 같이 출력되면 정상:
+
+```
+Watching for file changes with StatReloader
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Django version 5.x.x, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
+```
+
+> `.env`에서 `ENABLE_PIPELINE_ON_RUNSERVER=True`로 설정했다면, 서버 시작 직후 자동으로 뉴스 크롤링과 AI 분석이 백그라운드에서 시작됩니다. 터미널에 로그가 출력됩니다.
+
+#### 터미널 2: 프론트엔드 서버
+
+새 터미널을 열고 실행합니다.
+
+```bash
+cd frontend
+npm run dev
+```
+
+아래와 같이 출력되면 정상:
+
+```
+  VITE v7.x.x  ready in xxx ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+```
+
+---
+
+### Step 11. 브라우저로 접속
+
+| 서비스 | URL | 설명 |
+|--------|-----|------|
+| **메인 대시보드** | http://localhost:5173 | 차트·통계 메인 화면 |
+| API 문서 (Swagger) | http://localhost:8000/api/docs/ | REST API 명세 |
+| Django 관리자 | http://localhost:8000/admin/ | 데이터 직접 조회/수정 |
+
+---
+
+### Step 12. 첫 번째 뉴스 수집 및 분석 (수동 실행)옵션
+
+자동 파이프라인이 활성화되어 있어도, 즉시 테스트하고 싶다면 수동으로 실행할 수 있습니다.
+
+```bash
+# 가상환경 활성화 상태에서 실행
+
+# 1단계: 뉴스 크롤링 (7개 키워드로 최대 700건 수집)
+python backend/manage.py shell -c "
+from articles.tasks import crawl_news
+crawl_news()
+"
+```
+
+```bash
+# 2단계: AI 분석 (수집된 기사를 Gemini가 판정)
+python backend/manage.py shell -c "
+from analyses.tasks import analyze_pending_articles
+analyze_pending_articles()
+"
+```
+
+> 기사당 약 3~5초 소요됩니다. 600건 기준 약 30~50분 걸릴 수 있습니다.
+
+분석이 끝나면 http://localhost:5173 에서 결과를 확인할 수 있습니다.
+
+---
+
+### 전체 단계 요약
+
+```
+1. python --version       → Python 3.12+ 확인
+2. node --version         → Node.js 18+ 확인
+3. 네이버 API 키 발급
+4. Gemini API 키 발급
+5. copy .env.example .env → API 키 입력
+6. python -m venv law_claude_venv2
+7. law_claude_venv2\Scripts\activate
+8. pip install -r backend/requirements.txt
+9. python backend/manage.py migrate
+10. python backend/manage.py seed_initial_data
+11. cd frontend && npm install && cd ..
+12. [터미널1] python backend/manage.py runserver
+13. [터미널2] cd frontend && npm run dev
+14. 브라우저에서 http://localhost:5173 열기
+```
+
+---
+
+### 초보자 트러블슈팅 {#beginners-troubleshooting}
+
+#### `python`을 찾을 수 없습니다
+
+```
+'python'은(는) 내부 또는 외부 명령, 실행할 수 있는 프로그램, 또는
+배치 파일이 아닙니다.
+```
+
+**해결**: Python 설치 시 `Add Python to PATH`를 체크하지 않은 경우입니다.
+Python을 제거한 후 재설치하면서 해당 옵션을 체크하세요.
+또는 `py --version`으로 시도해보세요 (Windows Python Launcher).
+
+---
+
+#### 가상환경 활성화 오류 (PowerShell)
+
+```
+이 시스템에서 스크립트를 실행할 수 없으므로 ...Scripts\Activate.ps1 파일을 로드할 수 없습니다.
+```
+
+**해결**: PowerShell 실행 정책 문제입니다. PowerShell을 **관리자 권한**으로 열고:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+이후 다시 가상환경 활성화를 시도하세요.
+
+---
+
+#### `pip install` 중 한글 인코딩 오류
+
+```
+UnicodeDecodeError: 'cp949' codec can't decode byte ...
+```
+
+**해결**:
+
+```bash
+# Windows CMD
+set PYTHONIOENCODING=utf-8
+pip install -r backend/requirements.txt
+
+# PowerShell
+$env:PYTHONIOENCODING="utf-8"
+pip install -r backend/requirements.txt
+```
+
+---
+
+#### `migrate` 실행 시 오류 — `.env` 파일을 못 찾음
+
+```
+KeyError: 'SECRET_KEY'  또는  FileNotFoundError: .env
+```
+
+**해결**: `.env` 파일이 프로젝트 루트(backend/ 폴더와 같은 위치)에 있는지 확인하세요.
+
+```
+law_news_c_v2/        ← 여기에
+├── .env              ← 이 파일
+├── backend/
+└── frontend/
+```
+
+---
+
+#### 서버가 이미 실행 중 / 포트 충돌
+
+```
+Error: That port is already in use.
+```
+
+**해결 (백엔드 포트 8000 충돌)**:
+
+```bash
+# 다른 포트로 실행
+python backend/manage.py runserver 8001
+```
+
+**해결 (프론트 포트 5173 충돌)**:
+Vite는 충돌 시 자동으로 5174, 5175 등을 사용합니다. 터미널에 표시된 URL을 사용하세요.
+
+---
+
+#### Gemini API 오류
+
+```
+google.api_core.exceptions.InvalidArgument: 400 API key not valid.
+```
+
+**해결**: `.env`의 `GEMINI_API_KEY` 값이 올바른지 확인하세요. 키 앞뒤에 공백이나 따옴표가 없어야 합니다.
+
+```env
+# 올바른 예시
+GEMINI_API_KEY=AIzaSyAbcdef123456...
+
+# 잘못된 예시 (따옴표 금지)
+GEMINI_API_KEY="AIzaSyAbcdef123456..."
+```
+
+---
+
+#### 네이버 API 오류
+
+```
+{"errorCode": "024", "errorMessage": "Not Exist Client ID"}
+```
+
+**해결**: `.env`의 `NAVER_CLIENT_ID`와 `NAVER_CLIENT_SECRET`이 올바른지 확인하세요.
+네이버 개발자센터에서 앱의 **사용 API**에 **검색**이 포함되어 있는지도 확인하세요.
+
+---
+
+#### `npm install` 후 `npm run dev` 오류
+
+```
+Error: Cannot find module ...
+```
+
+**해결**: `frontend/` 폴더 안에서 실행했는지 확인하세요.
+
+```bash
+cd frontend
+npm install    # 먼저 설치
+npm run dev    # 그 다음 실행
+```
+
+---
+
+#### 브라우저에서 데이터가 안 보임 (빈 대시보드)
+
+뉴스 수집과 AI 분석이 아직 실행되지 않았거나, 진행 중인 상태입니다.
+
+1. 백엔드 터미널에서 로그 확인 (크롤링/분석 진행 중인지)
+2. 수동 실행으로 테스트:
+
+```bash
+python backend/manage.py shell -c "
+from articles.tasks import crawl_news
+result = crawl_news()
+print('수집 완료:', result)
+"
+```
+
+---
+
+---
+
+## 기존 상세 문서
+
+> 이하는 아키텍처·프롬프트·API 명세·운영 가이드 등 기술 상세 문서입니다.
+
+---
+
 > **소송금융(Litigation Finance) 투자 적합 사건을 자동으로 발굴하는 AI 시스템**
 >
-> 네이버 뉴스를 실시간 수집하고, GPT-4o가 소송금융 가이드라인(C1~C6)에 따라
+> 네이버 뉴스를 실시간 수집하고, Gemini 2.5 Flash가 소송금융 가이드라인(C1~C6)에 따라
 > High / Medium / Low 적합도를 자동 판정합니다.
 
 ---
@@ -42,7 +500,7 @@
 | 단계 | 사람이 하던 일 | 시스템이 대신 하는 일 |
 |------|-------------|-------------------|
 | 1단계 | 매일 뉴스를 검색하여 법률 관련 기사를 찾음 | 네이버 뉴스 API로 7개 키워드 자동 크롤링 |
-| 2단계 | 기사를 읽고 투자 적합 여부를 판단 | GPT-4o가 6가지 기준(C1~C6)으로 자동 판정 |
+| 2단계 | 기사를 읽고 투자 적합 여부를 판단 | Gemini 2.5 Flash가 6가지 기준(C1~C6)으로 자동 판정 |
 | 3단계 | 유사한 사건끼리 분류·정리 | AI가 자동으로 사건 그룹(Case ID) 생성 |
 | 4단계 | 엑셀로 보고서 작성 | 대시보드 + 엑셀 자동 내보내기 |
 
@@ -55,10 +513,10 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        사용자 (브라우저)                              │
-│                     http://localhost:5174                            │
+│                     http://localhost:5173                            │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │ HTTP 요청
-                           â–¼
+                           ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    프론트엔드 (Vite + React)                         │
 │                                                                     │
@@ -70,7 +528,7 @@
 │  Vite 개발서버가 /api/* 요청을 백엔드로 프록시 (proxy)                │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │ /api/*
-                           â–¼
+                           ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                   백엔드 (Django REST Framework)                     │
 │                     http://localhost:8000                            │
@@ -88,12 +546,12 @@
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
               ┌────────────┴────────────┐
-              â–¼                         â–¼
+              ▼                         ▼
 ┌──────────────────────┐  ┌──────────────────────┐
-│   네이버 뉴스 API     │  │    OpenAI GPT-4o     │
-│   (기사 수집)         │  │    (AI 분석)          │
+│   네이버 뉴스 API     │  │  Google Gemini 2.5   │
+│   (기사 수집)         │  │  Flash (AI 분석)      │
 │                      │  │                      │
-│  Client-Id/Secret    │  │  Gemini (백업 LLM)    │
+│  Client-Id/Secret    │  │  GEMINI_API_KEY       │
 └──────────────────────┘  └──────────────────────┘
 ```
 
@@ -103,9 +561,9 @@
  ① 크롤링                  ② AI 분석                    ③ 결과 제공
  ──────────                ──────────                   ──────────
 
- 네이버 뉴스 API            GPT-4o API                   REST API
+ 네이버 뉴스 API            Gemini 2.5 Flash              REST API
       │                        │                            │
-      â–¼                        â–¼                            â–¼
+      ▼                        ▼                            ▼
 ┌───────────┐  pending   ┌───────────┐  analyzed    ┌──────────────┐
 │  키워드별   │ ────────▶ │  기사별     │ ──────────▶ │  대시보드     │
 │  100건 검색 │  (저장)   │  LLM 호출   │  (저장)     │  분석 목록    │
@@ -127,12 +585,11 @@
 | Django REST Framework | 3.14+ | REST API 구축 |
 | django-filter | 23.5+ | API 필터링 |
 | drf-spectacular | 0.27+ | Swagger API 문서 자동 생성 |
-| OpenAI SDK | 1.0+ | GPT-4o LLM 호출 |
-| google-generativeai | 0.8+ | Gemini 백업 LLM |
+| google-generativeai | 0.8+ | Gemini 2.5 Flash LLM |
+| APScheduler | 3.x | 자동 파이프라인 스케줄러 |
 | requests | 2.31+ | 네이버 API HTTP 호출 |
 | BeautifulSoup4 | 4.12+ | HTML 파싱 (기사 본문 추출) |
 | openpyxl | 3.1+ | 엑셀 파일 생성 |
-| Celery | 5.3+ | 비동기 태스크 큐 (예정) |
 | SQLite | 내장 | 개발용 데이터베이스 |
 
 ### 프론트엔드
@@ -167,13 +624,12 @@ law_news_c_v2/                    ← 프로젝트 루트
 │   ├── config/                   ← Django 프로젝트 설정
 │   │   ├── settings.py           ← 전체 설정 (DB, API키, CORS 등)
 │   │   ├── urls.py               ← URL 라우팅 (api/, admin/, docs/)
-│   │   ├── celery.py             ← Celery 설정
-│   │   └── __init__.py           ← Celery 앱 자동 로드
+│   │   └── __init__.py
 │   │
 │   ├── articles/                 ← 뉴스 기사 앱 (수집 담당)
 │   │   ├── models.py             ← 모델: MediaSource, Keyword, Article
 │   │   ├── crawlers.py           ← 네이버 뉴스 API 크롤러
-│   │   ├── tasks.py              ← 크롤링 Celery 태스크
+│   │   ├── tasks.py              ← 크롤링 태스크
 │   │   ├── serializers.py        ← DRF 시리얼라이저
 │   │   ├── views.py              ← API 뷰셋
 │   │   ├── urls.py               ← 라우터 등록
@@ -185,7 +641,7 @@ law_news_c_v2/                    ← 프로젝트 루트
 │       ├── models.py             ← 모델: CaseGroup, Analysis
 │       ├── prompts.py            ← LLM 프롬프트 + Few-shot 예시
 │       ├── validators.py         ← LLM 응답 JSON 검증
-│       ├── tasks.py              ← 분석 Celery 태스크 (GPT-4o + Gemini)
+│       ├── tasks.py              ← 분석 태스크 (Gemini 2.5 Flash)
 │       ├── export.py             ← 엑셀 내보내기
 │       ├── serializers.py        ← DRF 시리얼라이저
 │       ├── views.py              ← API 뷰셋 (통계, 필터, 엑셀)
@@ -240,19 +696,7 @@ python --version
 >
 > **Windows 설치 시 주의**: 설치 화면에서 `Add Python to PATH` 체크박스를 반드시 체크하세요.
 
-### 5-2. uv 설치 (Python 패키지 매니저)
-
-이 프로젝트는 `pip` 대신 더 빠른 `uv`를 사용합니다.
-
-```bash
-# uv 설치
-pip install uv
-
-# 확인
-uv --version
-```
-
-### 5-3. Node.js 설치
+### 5-2. Node.js 설치
 
 **Node.js 18 이상**이 필요합니다.
 
@@ -267,15 +711,14 @@ npm --version
 
 > 아직 설치하지 않았다면: https://nodejs.org/
 
-### 5-4. API 키 준비
+### 5-3. API 키 준비
 
-시스템이 작동하려면 3개의 API 키가 필요합니다:
+시스템이 작동하려면 **2개의 API 키**가 필요합니다:
 
 | API | 용도 | 발급처 |
 |-----|------|--------|
 | 네이버 검색 API | 뉴스 기사 수집 | [네이버 개발자센터](https://developers.naver.com/apps/) |
-| OpenAI API | GPT-4o 분석 (주 LLM) | [OpenAI Platform](https://platform.openai.com/api-keys) |
-| Gemini API | Gemini 분석 (백업 LLM) | [Google AI Studio](https://aistudio.google.com/apikey) |
+| Gemini API | AI 분석 (Gemini 2.5 Flash) | [Google AI Studio](https://aistudio.google.com/apikey) |
 
 ---
 
@@ -298,15 +741,14 @@ cp .env.example .env
 # 아래 항목들을 본인의 키로 변경:
 #   NAVER_CLIENT_ID=발급받은_클라이언트_ID
 #   NAVER_CLIENT_SECRET=발급받은_시크릿
-#   OPENAI_API_KEY=sk-발급받은_키
-#   GEMINI_API_KEY=발급받은_키
+#   GEMINI_API_KEY=발급받은_Gemini_키
 ```
 
 ### 6-3. 백엔드 설치
 
 ```bash
 # 1) 가상환경 생성
-uv venv law_claude_venv2
+python -m venv law_claude_venv2
 
 # 2) 가상환경 활성화
 # Windows:
@@ -315,7 +757,7 @@ law_claude_venv2\Scripts\activate
 source law_claude_venv2/bin/activate
 
 # 3) 패키지 설치
-uv pip install -r backend/requirements.txt
+pip install -r backend/requirements.txt
 
 # 4) 데이터베이스 초기화 (테이블 생성)
 python backend/manage.py migrate
@@ -323,10 +765,8 @@ python backend/manage.py migrate
 # 5) 초기 데이터 입력 (80개 언론사 + 7개 키워드)
 python backend/manage.py seed_initial_data
 
-# 6) 관리자 계정 생성
+# 6) 관리자 계정 생성 (선택)
 python backend/manage.py createsuperuser
-# Username: admin
-# Password: (원하는 비밀번호)
 ```
 
 ### 6-4. 프론트엔드 설치
@@ -369,14 +809,14 @@ from articles.tasks import crawl_news
 crawl_news()
 "
 
-# 2) AI 분석 (수집된 모든 기사에 대해 GPT-4o 분석 실행)
+# 2) AI 분석 (수집된 모든 기사에 대해 Gemini 분석 실행)
 python backend/manage.py shell -c "
 from analyses.tasks import analyze_pending_articles
 analyze_pending_articles()
 "
 ```
 
-> **참고**: AI 분석은 기사당 약 4초 소요됩니다. 600건 기준 약 40분 소요됩니다.
+> **참고**: AI 분석은 기사당 약 3~5초 소요됩니다.
 
 ---
 
@@ -403,16 +843,16 @@ analyze_pending_articles()
 │                                      └──────────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
                               │
-                              â–¼
+                              ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │                       STEP 2: AI 분석                            │
 │                                                                  │
 │  pending 상태의 기사를 하나씩 처리:                                 │
 │                                                                  │
 │  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐      │
-│  │ 프롬프트 구성  │ ──▶ │  GPT-4o 호출  │ ──▶ │ JSON 응답    │      │
-│  │ (시스템 프롬프 │     │  (실패 시     │     │  파싱/검증   │      │
-│  │  트 + Few-shot│     │   Gemini)    │     │              │      │
+│  │ 프롬프트 구성  │ ──▶ │ Gemini 호출   │ ──▶ │ JSON 응답    │      │
+│  │ (시스템 프롬프 │     │ 2.5 Flash    │     │  파싱/검증   │      │
+│  │  트 + Few-shot│     │              │     │              │      │
 │  │  + 기사 본문) │     │              │     │              │      │
 │  └──────────────┘     └──────────────┘     └──────┬───────┘      │
 │                                                    │              │
@@ -428,7 +868,7 @@ analyze_pending_articles()
 │  └──────────────────────────────────────────────────────┘        │
 └──────────────────────────────────────────────────────────────────┘
                               │
-                              â–¼
+                              ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │                     STEP 3: 결과 활용                             │
 │                                                                  │
@@ -444,7 +884,7 @@ analyze_pending_articles()
 ```
 네이버 뉴스 검색 API 호출
           │
-          â–¼
+          ▼
     검색 결과 (JSON)
     ├── title (HTML 태그 포함)
     ├── link (네이버 뉴스 URL)
@@ -452,27 +892,27 @@ analyze_pending_articles()
     ├── description (요약)
     └── pubDate (발행일)
           │
-          â–¼
+          ▼
     ┌─────────────────────────────────┐
     │ URL 중복 체크                    │
     │ DB에 이미 같은 URL이 있으면 SKIP  │
     └──────────────┬──────────────────┘
                    │ 새 기사만 진행
-                   â–¼
+                   ▼
     ┌─────────────────────────────────┐
     │ 언론사 식별                      │
     │ 1순위: URL 도메인 매핑 (60+개)    │
     │ 2순위: 네이버 페이지 스크래핑      │
     └──────────────┬──────────────────┘
                    │
-                   â–¼
+                   ▼
     ┌─────────────────────────────────┐
     │ 기사 본문 추출                   │
     │ 네이버 뉴스 페이지의 #dic_area   │
     │ 에서 HTML → 텍스트 변환          │
     └──────────────┬──────────────────┘
                    │
-                   â–¼
+                   ▼
     Article 테이블에 저장 (status="pending")
 ```
 
@@ -505,7 +945,7 @@ analyze_pending_articles()
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                    GPT-4o 메시지 구조                       │
+│                Gemini 2.5 Flash 메시지 구조                  │
 │                                                            │
 │  1. [system] 시스템 프롬프트                                │
 │     - 역할: 소송금융 투자 심사역                             │
@@ -521,7 +961,7 @@ analyze_pending_articles()
 │                                                            │
 │  8. [user] 실제 분석 대상 기사 (본문 3000자 제한)             │
 │                                                            │
-│  설정: temperature=0.1, max_tokens=1000, JSON 응답 강제     │
+│  설정: temperature=0.1, JSON 응답 강제                      │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -553,12 +993,12 @@ analyze_pending_articles()
               │          │          │
           4개 이상    2~3개      1개 이하
               │          │          │
-              â–¼          â–¼          â–¼
+              ▼          ▼          ▼
          ┌────────┐ ┌────────┐ ┌────────┐
          │  High  │ │ Medium │ │  Low   │
          └────┬───┘ └────┬───┘ └────────┘
               │          │
-              â–¼          â–¼
+              ▼          ▼
          단, X1(종결) 해당 시 → 무조건 Low
 ```
 
@@ -585,24 +1025,6 @@ analyze_pending_articles()
   "summary": "쿠팡에서 대규모 개인정보 유출 사태가 발생하여...",
   "case_name": "쿠팡 개인정보 유출"
 }
-```
-
-### LLM Fallback (백업) 전략
-
-```
- GPT-4o 호출 시도
-      │
-      ├── 성공 → 응답 JSON 파싱 → 검증 → 저장
-      │
-      └── 실패 (API 오류, 타임아웃 등)
-              │
-              â–¼
-        Gemini 1.5 Flash 호출 시도
-              │
-              ├── 성공 → 응답 JSON 파싱 → 검증 → 저장
-              │
-              └── 실패 → Article.status = "failed"
-                         Article.retry_count += 1
 ```
 
 ---
@@ -649,7 +1071,7 @@ analyze_pending_articles()
 │ created_at         │        │ stage: 피해발생|절차진행|소송중|판결선고|종결       │
 │ updated_at         │        │ stage_detail (단계 상세)                         │
 └─────────────────────┘        │ summary (AI 요약 3~5문장)                       │
-                               │ llm_model (gpt-4o)                             │
+                               │ llm_model (gemini-2.5-flash)                   │
                                │ prompt_tokens                                  │
                                │ completion_tokens                              │
                                │ analyzed_at                                    │
@@ -679,12 +1101,12 @@ analyze_pending_articles()
  LLM 응답에서 case_name 추출
  (예: "쿠팡 개인정보 유출")
           │
-          â–¼
+          ▼
  같은 이름의 CaseGroup이 이미 있는가?
           │
     ┌─────┴─────┐
     │ YES       │ NO
-    â–¼           â–¼
+    ▼           ▼
   기존 그룹    새 그룹 생성
   연결        CASE-2026-XXX
               (자동 번호 증가)
@@ -845,7 +1267,7 @@ GET /api/analyses/stats/
   "today_high": 59,
   "today_medium": 133,
   "total_analyzed": 654,
-  "monthly_cost": 6774,
+  "monthly_cost": 0,
   "suitability_distribution": [
     {"name": "High", "value": 59},
     {"name": "Medium", "value": 133},
@@ -922,13 +1344,6 @@ GET /api/analyses/stats/
 │                                                          │
 │  ┌──────────────────────────────────────────────────┐   │
 │  │ [검색창]  [적합도 ▼]  [단계 ▼]      [엑셀 다운로드]│   │
-│  │           ┌──────────────┐                        │   │
-│  │           │ 전체          │                        │   │
-│  │           │ High + Medium │ ← 복수 필터            │   │
-│  │           │ High          │                        │   │
-│  │           │ Medium        │                        │   │
-│  │           │ Low           │                        │   │
-│  │           └──────────────┘                        │   │
 │  └──────────────────────────────────────────────────┘   │
 │                                                          │
 │  적합도│기사제목│분야│피해자│상대방│피해액│단계│케이스│날짜 │
@@ -991,23 +1406,21 @@ GET /api/analyses/stats/
 | `ALLOWED_HOSTS` | 허용 호스트 | `localhost,127.0.0.1` |
 | `NAVER_CLIENT_ID` | 네이버 API 클라이언트 ID | 네이버 개발자센터에서 발급 |
 | `NAVER_CLIENT_SECRET` | 네이버 API 시크릿 | 네이버 개발자센터에서 발급 |
-| `OPENAI_API_KEY` | OpenAI API 키 | `sk-proj-...` |
-| `LLM_MODEL` | 사용할 LLM 모델 | `gpt-4o` |
+| `GEMINI_API_KEY` | Gemini API 키 | Google AI Studio에서 발급 |
+| `LLM_MODEL` | 사용할 LLM 모델 | `gemini-2.5-flash` |
 | `LLM_TEMPERATURE` | LLM 응답 다양성 (낮을수록 일관적) | `0.1` |
-| `LLM_MAX_TOKENS` | LLM 최대 응답 길이 | `1000` |
-| `GEMINI_API_KEY` | Gemini API 키 (백업용) | Google AI Studio에서 발급 |
-| `REDIS_URL` | Redis 접속 주소 (Celery용) | `redis://localhost:6379/0` |
 | `CRAWL_INTERVAL_MINUTES` | 크롤링 주기 (분) | `60` |
 | `NEWS_KEYWORDS` | 수집 키워드 (쉼표 구분) | `소송,손해배상,집단소송,...` |
+| `ENABLE_PIPELINE_ON_RUNSERVER` | runserver 시 자동 파이프라인 | `False` |
+| `PIPELINE_INTERVAL_MINUTES` | 자동 파이프라인 반복 주기 (분) | `60` |
 
 ### LLM 비용 추정
 
 | 모델 | 입력 가격 | 출력 가격 | 기사당 비용 |
 |------|----------|----------|-----------|
-| GPT-4o | $2.50 / 1M tokens | $10.00 / 1M tokens | 약 $0.007 (약 10원) |
-| Gemini 1.5 Flash | 무료 티어 | 무료 티어 | $0 (백업용) |
+| Gemini 2.5 Flash | 무료 티어 / 유료 구간 존재 | 무료 티어 / 유료 구간 존재 | 무료 티어 내 $0 |
 
-> 654건 분석 실측 결과: 입력 1,324,789 tokens + 출력 152,658 tokens = **약 $4.84 (약 6,774원)**
+> Gemini는 현재 토큰 수를 DB에 기록하지 않으므로, 대시보드의 "비용" 항목은 항상 0원으로 표시됩니다.
 
 ### 등록된 언론사 (80개)
 
@@ -1017,7 +1430,20 @@ GET /api/analyses/stats/
 
 ## 13. 운영 가이드
 
-### 일일 운영 루틴
+### 자동 파이프라인 (권장)
+
+`.env`에서 아래 설정을 활성화하면, `runserver` 시작과 동시에 자동으로 크롤링 + 분석이 실행됩니다.
+
+```env
+ENABLE_PIPELINE_ON_RUNSERVER=True
+PIPELINE_INTERVAL_MINUTES=60
+```
+
+서버 시작 시:
+1. 즉시 1회 `crawl_news()` + `analyze_pending_articles()` 실행 (백그라운드 스레드)
+2. 이후 60분마다 반복
+
+### 일일 운영 루틴 (수동)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -1026,11 +1452,11 @@ GET /api/analyses/stats/
 │  1. 크롤링 실행 ─────────────────────────────────▶ 약 5분     │
 │     새로운 법률 뉴스 수집 (7개 키워드)                         │
 │                                                              │
-│  2. AI 분석 실행 ────────────────────────────────▶ 약 40분    │
-│     수집된 기사에 GPT-4o 적합도 판정                           │
+│  2. AI 분석 실행 ────────────────────────────────▶ 약 30~50분 │
+│     수집된 기사에 Gemini 적합도 판정                           │
 │                                                              │
 │  3. 대시보드 확인 ───────────────────────────────▶ 즉시       │
-│     http://localhost:5174                                    │
+│     http://localhost:5173                                    │
 │                                                              │
 │  4. High 사건 확인 ──────────────────────────────▶ 즉시       │
 │     분석 목록 → "High + Medium" 필터 선택                     │
@@ -1073,7 +1499,7 @@ analyze_pending_articles()
 ```
 1. 기존 Analysis 레코드 삭제
 2. Article.status → "pending"으로 복구
-3. GPT-4o로 재분석 실행
+3. Gemini 2.5 Flash로 재분석 실행
 ```
 
 ---
@@ -1098,14 +1524,14 @@ $env:PYTHONIOENCODING="utf-8"
 python backend/manage.py runserver
 ```
 
-### pip/uv 패키지 설치 실패
+### pip 패키지 설치 실패
 
 ```bash
 # pip이 없는 경우
 python -m ensurepip --upgrade
 
-# uv로 설치
-uv pip install -r backend/requirements.txt
+# 재설치
+pip install -r backend/requirements.txt
 ```
 
 ### 포트 충돌 (5173 이미 사용 중)
@@ -1113,7 +1539,7 @@ uv pip install -r backend/requirements.txt
 Vite가 자동으로 다음 포트(5174 등)를 선택합니다. 터미널에 표시된 URL을 확인하세요.
 
 ```
-  VITE v7.3.1  ready in 461 ms
+  VITE v7.x.x  ready in 461 ms
   ➜  Local:   http://localhost:5174/    ← 이 URL을 사용
 ```
 
@@ -1138,7 +1564,7 @@ for a in failed:
 python backend/manage.py shell -c "
 from articles.models import Article
 from analyses.tasks import analyze_pending_articles
-Article.objects.filter(status='failed').update(status='pending')
+Article.objects.filter(status='failed').update(status='pending', retry_count=0)
 analyze_pending_articles()
 "
 ```
@@ -1151,117 +1577,19 @@ python backend/manage.py makemigrations
 python backend/manage.py migrate
 ```
 
+### 빠른 상태 점검
+
+```bash
+# Article 상태별 집계
+python backend/manage.py shell -c "
+from articles.models import Article
+from django.db.models import Count
+print(list(Article.objects.values('status').annotate(c=Count('id')).order_by('status')))
+"
+```
+
 ---
 
 ## 라이선스
 
 이 프로젝트는 로앤굿(LawNGood)을 위해 개발되었습니다.
-
-
-백엔드 서버
-```bash
-cd backend
-python manage.py runserver
-```
-
-Celery worker (새 터미널)
-```bash
-cd backend
-celery -A config worker -l info
-```
-
-(선택) Celery beat 주기 실행 (다른 터미널)
-```bash
-cd backend
-celery -A config beat -l info
-```
-
-수동으로 뉴스 1회 수집
-```bash
-cd backend
-python manage.py shell -c "from articles.tasks import crawl_news_sync; print(crawl_news_sync())"
-```
-
-수동으로 pending 기사 분석
-```bash
-cd backend
-python manage.py shell -c "from analyses.tasks import analyze_pending_articles; print(analyze_pending_articles())"
-```
-
-참고:
-- worker가 없으면 `.delay()`로 보낸 태스크는 실행되지 않습니다.
-- beat는 "주기적으로 태스크를 큐에 넣는 역할"이라 보통 worker와 함께 실행합니다.
-## 15. 로컬 실행 모드 (무도커)
-
-### A) 권장: Redis/Celery 없이 동기 실행
-
-이 모드는 Windows 로컬에서 가장 단순합니다.
-
-1) `.env` 설정
-```env
-# Gemini 사용
-OPENAI_API_KEY=
-GEMINI_API_KEY=your-gemini-key
-LLM_MODEL=gemini-2.5-flash
-
-# runserver 자동 파이프라인 (APScheduler)
-ENABLE_PIPELINE_ON_RUNSERVER=true
-PIPELINE_INTERVAL_MINUTES=60
-USE_CELERY_PIPELINE=false
-```
-
-2) 백엔드 실행
-```bash
-cd backend
-python manage.py runserver 8000
-```
-
-설명:
-- 서버 부팅 직후 1회 `crawl_news_sync()` 실행
-- 이후 `PIPELINE_INTERVAL_MINUTES` 간격으로 자동 반복
-- 수집 후 `analyze_pending_articles()`를 동기 호출
-
-3) 프론트 실행
-```bash
-cd frontend
-npm run dev
-```
-
-### B) Redis/Celery 모드
-
-이 모드는 큐 기반 비동기 처리입니다.
-
-1) `.env` 설정
-```env
-ENABLE_PIPELINE_ON_RUNSERVER=true
-PIPELINE_INTERVAL_MINUTES=60
-USE_CELERY_PIPELINE=true
-REDIS_URL=redis://localhost:6379/0
-```
-
-2) Redis + Worker 실행 후 서버 실행
-```bash
-cd backend
-celery -A config worker -l info --pool=solo
-python manage.py runserver 8000
-```
-
-주의:
-- `USE_CELERY_PIPELINE=true`인데 Redis/worker가 없으면 태스크가 처리되지 않습니다.
-
-## 16. Gemini 관련 주의사항
-
-- 현재 코드 기준 Gemini SDK는 `google.genai`를 사용합니다.
-- 모델은 `gemini-2.5-flash`를 권장합니다.
-- `.env`의 `LLM_MODEL` 값은 실제 계정에서 사용 가능한 모델명과 일치해야 합니다.
-- OpenAI 키를 사용하지 않을 때는 `OPENAI_API_KEY`를 비워두세요.
-
-## 17. 빠른 점검 명령어
-
-```bash
-# 상태 집계
-python manage.py shell -c "from articles.models import Article; from django.db.models import Count; print(list(Article.objects.values('status').annotate(c=Count('id')).order_by('status')))"
-
-# 수동 1회 수집+분석 (동기)
-python manage.py shell -c "from articles.tasks import crawl_news_sync; from analyses.tasks import analyze_pending_articles; n=crawl_news_sync(); r=analyze_pending_articles(); print({'collected': n, **r})"
-```

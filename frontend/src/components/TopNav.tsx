@@ -21,7 +21,7 @@ export default function TopNav() {
             key={item.path}
             to={item.path}
             className={`text-sm transition-colors ${
-              location.pathname === item.path
+              (item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path))
                 ? 'text-[var(--color-gold)] font-semibold'
                 : 'text-gray-300 hover:text-white'
             }`}

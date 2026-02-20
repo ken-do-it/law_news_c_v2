@@ -8,8 +8,12 @@ export default function Settings() {
   const [loading, setLoading] = useState(false);
 
   const fetchKeywords = async () => {
-    const data = await getKeywords();
-    setKeywords(data);
+    try {
+      const data = await getKeywords();
+      setKeywords(data);
+    } catch {
+      console.error('키워드 불러오기 실패');
+    }
   };
 
   useEffect(() => { fetchKeywords(); }, []);
