@@ -125,7 +125,7 @@ install-frontend:
 
 [doc("백엔드 의존성 설치")]
 install-backend:
-    {{python}} -m pip install -r backend/requirements.txt
+    uv pip install -e . --python {{python}}
 
 [doc("전체 의존성 설치")]
 install: install-backend install-frontend
