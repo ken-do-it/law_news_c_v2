@@ -20,9 +20,5 @@ dependencies = [
     "google-generativeai>=0.8",
 ]
 
-[build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-py-modules = []
+[tool.uv]
+package = false

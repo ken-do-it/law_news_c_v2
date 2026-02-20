@@ -4,10 +4,7 @@
 
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
-python     := ".\\.venv\\Scripts\\python.exe"
-manage     := python + " backend/manage.py"
-celery     := ".\\.venv\\Scripts\\celery.exe"
-celery_abs := justfile_directory() + "\\.venv\\Scripts\\celery.exe"
+manage := "uv run python backend/manage.py"
 
 # ── 기본: 사용 가능한 명령어 목록 ─────────────────────────
 [doc("사용 가능한 명령어 목록")]
@@ -20,7 +17,7 @@ default:
 
 [doc("백엔드 + 프론트엔드 동시 실행")]
 dev:
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}'; {{manage}} runserver"
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}'; uv run python backend/manage.py runserver"
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}\frontend'; bun run dev"
     Write-Host "`n  Backend  → http://localhost:8000" -ForegroundColor Cyan
     Write-Host "  Frontend → http://localhost:5173`n" -ForegroundColor Cyan
@@ -48,7 +45,7 @@ seed:
 
 [doc("DB 초기화: 삭제 → 마이그레이션 → 시드")]
 db-reset:
-    {{python}} scripts/reset_db.py
+    uv run python scripts/reset_db.py
     {{manage}} migrate
     {{manage}} seed_initial_data
     Write-Host "`n  DB 초기화 완료" -ForegroundColor Green
@@ -67,19 +64,19 @@ dbshell:
 
 [doc("뉴스 수집 (Celery 없이 동기 실행)")]
 crawl:
-    {{python}} scripts/crawl_now.py
+    uv run python scripts/crawl_now.py
 
 [doc("대기 중인 기사 AI 분석 (Celery 없이 동기 실행)")]
 analyze:
-    {{python}} scripts/analyze_now.py
+    uv run python scripts/analyze_now.py
 
 [doc("수집 → 분석 전체 파이프라인")]
 pipeline:
-    {{python}} scripts/pipeline.py
+    uv run python scripts/pipeline.py
 
 [doc("특정 기사 재분석 (just reanalyze 42)")]
 reanalyze article_id:
-    {{python}} scripts/reanalyze.py {{article_id}}
+    uv run python scripts/reanalyze.py {{article_id}}
 
 # ============================================================
 #  Celery (Redis 필요)
@@ -87,16 +84,16 @@ reanalyze article_id:
 
 [doc("Celery 워커 실행")]
 worker:
-    cd backend; & "{{celery_abs}}" -A config worker -l info -P solo
+    cd backend; uv run celery -A config worker -l info -P solo
 
 [doc("Celery Beat 스케줄러 실행")]
 beat:
-    cd backend; & "{{celery_abs}}" -A config beat -l info
+    cd backend; uv run celery -A config beat -l info
 
 [doc("Celery 워커 + Beat 동시 실행")]
 celery:
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}\backend'; & '{{celery_abs}}' -A config worker -l info -P solo"
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}\backend'; & '{{celery_abs}}' -A config beat -l info"
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}\backend'; uv run celery -A config worker -l info -P solo"
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}\backend'; uv run celery -A config beat -l info"
     Write-Host "`n  Celery Worker + Beat 실행됨" -ForegroundColor Cyan
 
 # ============================================================
@@ -105,7 +102,7 @@ celery:
 
 [doc("현재 시스템 통계 출력")]
 stats:
-    {{python}} scripts/show_stats.py
+    uv run python scripts/show_stats.py
 
 [doc("Django 셸")]
 shell:
@@ -123,9 +120,9 @@ lint:
 install-frontend:
     cd frontend; bun install
 
-[doc("백엔드 의존성 설치")]
+[doc("백엔드 의존성 설치 (uv.lock 기반)")]
 install-backend:
-    uv pip install -e . --python {{python}}
+    uv sync
 
 [doc("전체 의존성 설치")]
 install: install-backend install-frontend
@@ -133,6 +130,18 @@ install: install-backend install-frontend
 [doc("전체 초기 셋업 (의존성 → DB → 시드)")]
 setup: install migrate seed
     Write-Host "`n  셋업 완료! 'just dev'로 서버를 시작하세요." -ForegroundColor Green
+
+[doc("의존성 추가 (just add django-extensions)")]
+add *packages:
+    uv add {{packages}}
+
+[doc("의존성 제거 (just remove django-extensions)")]
+remove *packages:
+    uv remove {{packages}}
+
+[doc("uv.lock 갱신")]
+lock:
+    uv lock
 
 [doc("API 문서 열기 (Swagger)")]
 docs:
@@ -144,4 +153,4 @@ admin:
 
 [doc("엑셀 내보내기")]
 export:
-    {{python}} scripts/export_excel.py
+    uv run python scripts/export_excel.py
