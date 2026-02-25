@@ -89,16 +89,6 @@ def crawl_news(self):
                 continue
 
     logger.info("크롤링 완료: 총 %d건 신규 수집", total_new)
-
-    # 분석 태스크 자동 트리거
-    if total_new > 0:
-        try:
-            from analyses.tasks import analyze_pending_articles
-
-            analyze_pending_articles.delay()
-        except Exception:
-            logger.exception("분석 태스크 트리거 실패")
-
     return total_new
 
 

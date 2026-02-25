@@ -47,7 +47,7 @@ export default function AnalysisDetail() {
         {/* 왼쪽: 기사 + AI 분석 */}
         <div className="flex-1 space-y-4">
           {/* 기사 헤더 */}
-          <div className="bg-white rounded-xl border border-[var(--color-border)] p-6">
+          <div className="bg-white rounded-xl border border-border p-6">
             <div className="flex items-center gap-2 mb-3">
               <SuitabilityBadge value={analysis.suitability} />
               <StageBadge value={analysis.stage} />
@@ -59,7 +59,7 @@ export default function AnalysisDetail() {
             </div>
             <h1 className="text-xl font-bold mb-2">{article?.title}</h1>
             <div className="flex items-center gap-3 text-sm text-gray-500">
-              <span>{article?.source?.name || article?.source_name}</span>
+              <span>{article?.source_name}</span>
               <span>|</span>
               <span>{article?.published_at?.slice(0, 10)}</span>
               {article?.url && (
@@ -74,7 +74,7 @@ export default function AnalysisDetail() {
           </div>
 
           {/* AI 분석 요약 */}
-          <div className="bg-white rounded-xl border border-[var(--color-border)] p-6">
+          <div className="bg-white rounded-xl border border-border p-6">
             <h2 className="text-sm font-semibold mb-3">🤖 AI 분석 요약</h2>
             <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
               {analysis.summary}
@@ -83,7 +83,7 @@ export default function AnalysisDetail() {
 
           {/* 판단 근거 */}
           <div
-            className="rounded-xl border border-[var(--color-border)] p-6"
+            className="rounded-xl border border-border p-6"
             style={{ backgroundColor: reasonBg[analysis.suitability] || '#fff' }}
           >
             <h2 className="text-sm font-semibold mb-3">📋 판단 근거</h2>
@@ -94,7 +94,7 @@ export default function AnalysisDetail() {
 
           {/* 유사 기사 목록 */}
           {analysis.related_articles && analysis.related_articles.length > 0 && (
-            <div className="bg-white rounded-xl border border-[var(--color-border)] p-6">
+            <div className="bg-white rounded-xl border border-border p-6">
               <h2 className="text-sm font-semibold mb-4">
                 📰 유사 기사 ({analysis.related_articles.length}건)
                 {analysis.case_group && (
@@ -139,7 +139,7 @@ export default function AnalysisDetail() {
 
         {/* 오른쪽: 상세 카드 (sticky) */}
         <div className="lg:w-[380px]">
-          <div className="bg-white rounded-xl border border-[var(--color-border)] p-6 lg:sticky lg:top-6 space-y-4">
+          <div className="bg-white rounded-xl border border-border p-6 lg:sticky lg:top-6 space-y-4">
             <h2 className="text-sm font-semibold border-b pb-2">분석 상세 정보</h2>
 
             <DetailRow icon="🎯" label="적합도" value={<SuitabilityBadge value={analysis.suitability} />} />
@@ -157,13 +157,13 @@ export default function AnalysisDetail() {
               <button
                 onClick={handleReanalyze}
                 disabled={reanalyzing}
-                className="w-full bg-[var(--color-navy)] text-white text-sm py-2 rounded hover:opacity-90 disabled:opacity-50"
+                className="w-full bg-navy text-white text-sm py-2 rounded hover:opacity-90 disabled:opacity-50"
               >
                 {reanalyzing ? '요청 중...' : '🔄 재분석 요청'}
               </button>
               <button
                 onClick={() => downloadExcel({})}
-                className="w-full border border-[var(--color-border)] text-sm py-2 rounded hover:bg-gray-50"
+                className="w-full border border-border text-sm py-2 rounded hover:bg-gray-50"
               >
                 📥 엑셀 내보내기
               </button>

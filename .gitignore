@@ -85,8 +85,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -134,17 +134,8 @@ dmypy.json
 cython_debug/
 
 # ============================================================
-# 패키지 매니저 락 파일 (필요시 주석 해제)
+# 패키지 매니저 (uv.lock, bun.lock 은 커밋 대상)
 # ============================================================
-#uv.lock
-#Pipfile.lock
-#poetry.lock
-#poetry.toml
-#pdm.lock
-#pdm.toml
-.pdm-python
-.pdm-build/
-.pixi
 __pypackages__/
 
 # ============================================================

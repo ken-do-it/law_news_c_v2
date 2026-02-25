@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 VALID_SUITABILITY = {"High", "Medium", "Low"}
 VALID_STAGES = {"피해 발생", "관련 절차 진행", "소송중", "판결 선고", "종결"}
+NOT_APPLICABLE_STAGES = {"해당 없음", "N/A", "n/a", "NA", "미상", "없음", "해당없음", "-", "null", "None"}
 
 
 def validate_and_parse(raw_response: str) -> dict | None:
@@ -17,12 +18,23 @@ def validate_and_parse(raw_response: str) -> dict | None:
         logger.error("JSON 파싱 실패: %s", raw_response[:200])
         return None
 
+    # is_relevant 먼저 확인 (비관련 기사는 일부 필드 완화)
+    is_relevant = data.get("is_relevant", True)
+    if not isinstance(is_relevant, bool):
+        is_relevant = True
+
     # 필수 필드 체크
-    required = ["suitability", "suitability_reason", "case_category", "summary"]
+    required = ["suitability", "suitability_reason", "summary"]
+    if is_relevant:
+        required.append("case_category")
     for field in required:
         if field not in data or not data[field]:
             logger.error("필수 필드 누락: %s", field)
             return None
+
+    # 비관련 기사의 case_category 기본값
+    if not is_relevant and not data.get("case_category"):
+        data["case_category"] = "해당 없음"
 
     # suitability 검증
     if data["suitability"] not in VALID_SUITABILITY:
@@ -32,8 +44,11 @@ def validate_and_parse(raw_response: str) -> dict | None:
     # stage 검증
     stage = data.get("stage", "")
     if stage and stage not in VALID_STAGES:
-        logger.warning("잘못된 stage 값: %s → 빈값으로 보정", stage)
-        data["stage"] = ""
+        if stage in NOT_APPLICABLE_STAGES:
+            data["stage"] = ""
+        else:
+            logger.warning("잘못된 stage 값: %s → 빈값으로 보정", stage)
+            data["stage"] = ""
 
     # 기본값 설정
     defaults = {
