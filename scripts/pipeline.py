@@ -8,7 +8,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from articles.tasks import crawl_news_sync  # noqa: E402
-from analyses.tasks import analyze_pending_articles  # noqa: E402
+from analyses.tasks import analyze_single_article  # noqa: E402
 from articles.models import Article  # noqa: E402
 
 
@@ -23,17 +23,30 @@ def main():
     print(f'  → 새 기사 {new_count}건 수집됨')
 
     # 2) 분석
-    pending = Article.objects.filter(status='pending').count()
+    pending = Article.objects.filter(status__in=['pending', 'analyzing']).order_by('collected_at')
+    total = pending.count()
     print('\n' + '=' * 50)
-    print(f'  STEP 2: AI 분석 (대기 {pending}건)')
+    print(f'  STEP 2: AI 분석 (대기 {total}건)')
     print('=' * 50 + '\n')
 
-    if pending > 0:
-        result = analyze_pending_articles()
-        print(f'  → 총 {result["total"]}건 '
-              f'(성공 {result["success"]}, 실패 {result["failed"]})')
-    else:
+    if total == 0:
         print('  → 분석할 기사 없음 — 건너뜀')
+    else:
+        success = 0
+        failed = 0
+        for i, article in enumerate(pending, 1):
+            t1 = time.time()
+            ok = analyze_single_article(article)
+            elapsed_item = time.time() - t1
+            if ok:
+                success += 1
+                tag = '✓'
+            else:
+                failed += 1
+                tag = '✗'
+            print(f'  [{i}/{total}] {tag} {article.title[:50]}  ({elapsed_item:.1f}s)', flush=True)
+
+        print(f'\n  → 총 {total}건 (성공 {success}, 실패 {failed})')
 
     elapsed = time.time() - t0
     print('\n' + '=' * 50)
