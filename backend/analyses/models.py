@@ -102,6 +102,28 @@ class Analysis(models.Model):
         help_text="법적 분쟁/소송과 관련 없는 기사는 False",
     )
 
+    # 로앤굿 심사 필드 (클라이언트 입력)
+    review_completed = models.BooleanField(
+        "심사 완료",
+        default=False,
+        db_index=True,
+        help_text="로앤굿이 해당 사건을 검토 완료한 경우 True",
+    )
+    client_suitability = models.CharField(
+        "로앤굿 심사 결과",
+        max_length=10,
+        choices=SUITABILITY_CHOICES,
+        null=True,
+        blank=True,
+        help_text="로앤굿이 직접 판단한 소송 적합도 (AI 결과와 다를 수 있음)",
+    )
+    accepted = models.BooleanField(
+        "통과 여부",
+        default=False,
+        db_index=True,
+        help_text="수임 대상으로 채택 여부 — 심사 완료 이후에만 True 가능",
+    )
+
     # LLM 메타 정보
     llm_model = models.CharField("사용 모델", max_length=50, default="gpt-4o")
     prompt_tokens = models.IntegerField("프롬프트 토큰", default=0)

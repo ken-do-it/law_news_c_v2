@@ -25,6 +25,7 @@ from .models import Analysis, CaseGroup
 from .serializers import (
     AnalysisDetailSerializer,   # 분석 상세 조회용 시리얼라이저
     AnalysisListSerializer,     # 분석 목록 조회용 시리얼라이저
+    AnalysisReviewSerializer,   # 심사 필드 PATCH용 시리얼라이저
     CaseGroupSerializer,        # 사건 그룹 시리얼라이저
 )
 
@@ -71,10 +72,21 @@ class AnalysisFilter(filters.FilterSet):
     # 법적 분쟁 관련 여부 필터 — 기본값 True (무관 기사 숨김)
     is_relevant = filters.BooleanFilter(field_name="is_relevant")
 
+    # 심사 완료 여부 필터 — ?review_completed=true / false
+    review_completed = filters.BooleanFilter(field_name="review_completed")
+
+    # 통과 여부 필터 — ?accepted=true / false
+    accepted = filters.BooleanFilter(field_name="accepted")
+
+    # 로앤굿 심사결과 필터 — 쉼표 구분 복수 선택 가능 (예: ?client_suitability=High,Medium)
+    client_suitability = filters.BaseInFilter(field_name="client_suitability")
+
     class Meta:
         model = Analysis
-        # 기본 필터 필드 목록 (위에서 개별 정의한 필터가 우선 적용됨)
-        fields = ["suitability", "case_category", "stage", "case_group", "is_relevant"]
+        fields = [
+            "suitability", "case_category", "stage", "case_group",
+            "is_relevant", "review_completed", "accepted", "client_suitability",
+        ]
 
 
 # ──────────────────────────────────────────────
@@ -84,15 +96,18 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
     """
     분석 결과(Analysis) API 엔드포인트.
 
-    ReadOnlyModelViewSet을 상속하므로 목록 조회(list)와 상세 조회(retrieve)만 제공합니다.
-    (생성/수정/삭제는 LLM 분석 태스크에서 자동으로 처리)
+    ReadOnlyModelViewSet을 상속하되 심사 필드에 한해 PATCH를 허용합니다.
+    (생성/전체수정/삭제는 LLM 분석 태스크에서 자동으로 처리)
 
     엔드포인트:
-      GET /api/analyses/          → 분석 결과 목록 (페이지네이션, 필터, 검색, 정렬)
-      GET /api/analyses/{id}/     → 분석 결과 상세
-      GET /api/analyses/stats/    → 대시보드 통계 데이터
-      GET /api/analyses/export/   → 엑셀 파일 다운로드
+      GET   /api/analyses/          → 분석 결과 목록 (페이지네이션, 필터, 검색, 정렬)
+      GET   /api/analyses/{id}/     → 분석 결과 상세
+      PATCH /api/analyses/{id}/     → 심사 필드 업데이트 (review_completed, client_suitability, accepted)
+      GET   /api/analyses/stats/    → 대시보드 통계 데이터
+      GET   /api/analyses/export/   → 엑셀 파일 다운로드
     """
+
+    http_method_names = ["get", "patch", "head", "options"]
 
     # QuerySet 정의 — select_related로 관련 모델을 JOIN하여 N+1 쿼리 방지
     # article: 기사 정보, article__source: 매체 정보, case_group: 사건 그룹
@@ -164,13 +179,23 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         요청 액션에 따라 시리얼라이저를 동적으로 선택합니다.
 
         - retrieve (상세 조회): AnalysisDetailSerializer
-          → 기사 본문, 사건 그룹 정보 등 전체 데이터 포함
+        - partial_update (PATCH): AnalysisReviewSerializer
         - list (목록 조회): AnalysisListSerializer
-          → 테이블 표시에 필요한 핵심 필드만 포함 (성능 최적화)
         """
         if self.action == "retrieve":
             return AnalysisDetailSerializer
+        if self.action == "partial_update":
+            return AnalysisReviewSerializer
         return AnalysisListSerializer
+
+    def partial_update(self, request, *args, **kwargs):
+        """심사 필드(review_completed, client_suitability, accepted) PATCH 처리"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        # 저장 후 목록 시리얼라이저 형식으로 응답 반환
+        return Response(AnalysisListSerializer(instance, context=self.get_serializer_context()).data)
 
     # ── 대시보드 통계 API ──
     @action(detail=False, methods=["get"])
@@ -269,6 +294,11 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
                 "medium": medium,
             })
 
+        # ── 8. 심사 현황 통계 ──
+        total_reviewed = Analysis.objects.filter(review_completed=True).count()
+        total_accepted = Analysis.objects.filter(accepted=True).count()
+        acceptance_rate = round(total_accepted / total_reviewed * 100) if total_reviewed > 0 else 0
+
         # 모든 통계 데이터를 JSON으로 반환
         return Response({
             "today_collected": today_collected,
@@ -279,6 +309,9 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             "suitability_distribution": suitability_distribution,
             "category_distribution": category_distribution,
             "weekly_trend": weekly_trend,
+            "total_reviewed": total_reviewed,
+            "total_accepted": total_accepted,
+            "acceptance_rate": acceptance_rate,
         })
 
     # ── 엑셀 내보내기 API ──

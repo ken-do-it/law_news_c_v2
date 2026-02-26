@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 
 const navItems = [
-  { path: '/', label: '대시보드' },
+  { path: '/', label: '심사 현황' },
   { path: '/analyses', label: '분석 목록' },
-  { path: '/settings', label: '설정' },
+  { path: '/settings', label: '키워드 관리' },
+  { path: '/dashboard', label: 'AI 대시보드' },
 ];
 
 export default function TopNav() {

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import TopNav from './components/TopNav';
+import ReviewHome from './pages/ReviewHome';
 import Dashboard from './pages/Dashboard';
 import AnalysisList from './pages/AnalysisList';
 import AnalysisDetail from './pages/AnalysisDetail';
@@ -11,7 +12,8 @@ export default function App() {
       <div className="min-h-screen bg-[var(--color-bg)]">
         <TopNav />
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<ReviewHome />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/analyses" element={<AnalysisList />} />
           <Route path="/analyses/:id" element={<AnalysisDetail />} />
           <Route path="/settings" element={<Settings />} />

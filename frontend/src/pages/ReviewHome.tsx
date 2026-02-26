@@ -1,0 +1,385 @@
+import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { getAnalyses, getStats, updateReview } from '../lib/api';
+import type { AnalysisFilters } from '../lib/api';
+import type { Analysis, DashboardStats } from '../lib/types';
+import StatsCard from '../components/StatsCard';
+import SuitabilityBadge from '../components/SuitabilityBadge';
+
+const SUITABILITY_OPTIONS = ['High', 'Medium', 'Low'] as const;
+
+function ClientSuitabilitySelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: 'High' | 'Medium' | 'Low' | null;
+  onChange: (v: 'High' | 'Medium' | 'Low' | null) => void;
+  disabled?: boolean;
+}) {
+  const colorMap: Record<string, string> = {
+    High: 'text-[var(--color-high)]',
+    Medium: 'text-[var(--color-medium)]',
+    Low: 'text-[var(--color-low)]',
+  };
+  return (
+    <select
+      value={value ?? ''}
+      onChange={(e) => {
+        const v = e.target.value as 'High' | 'Medium' | 'Low' | '';
+        onChange(v === '' ? null : v);
+      }}
+      disabled={disabled}
+      className={`text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-gold)] disabled:opacity-40 disabled:cursor-not-allowed ${value ? colorMap[value] : 'text-gray-400'}`}
+    >
+      <option value="">미선택</option>
+      {SUITABILITY_OPTIONS.map((opt) => (
+        <option key={opt} value={opt} className={colorMap[opt]}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+type SuitabilityFilter = 'all' | 'High' | 'Medium' | 'Low';
+type BoolFilter = 'all' | 'true' | 'false';
+
+interface Filters {
+  suitability: SuitabilityFilter;
+  review_completed: BoolFilter;
+  accepted: BoolFilter;
+}
+
+const DEFAULT_FILTERS: Filters = {
+  suitability: 'all',
+  review_completed: 'all',
+  accepted: 'all',
+};
+
+function FilterToggle<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500 whitespace-nowrap">{label}</span>
+      <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={`px-3 py-1 text-xs transition-colors ${
+              value === opt.value
+                ? 'bg-[var(--color-navy)] text-white font-semibold'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function ReviewHome() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [analyses, setAnalyses] = useState<Analysis[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<Set<number>>(new Set());
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+
+  const PAGE_SIZE = 20;
+
+  const buildApiFilters = useCallback((f: Filters, p: number): AnalysisFilters => {
+    const params: AnalysisFilters = { ordering: '-analyzed_at', page: p };
+    if (f.suitability !== 'all') params.suitability = f.suitability;
+    if (f.review_completed !== 'all') params.review_completed = f.review_completed === 'true';
+    if (f.accepted !== 'all') params.accepted = f.accepted === 'true';
+    return params;
+  }, []);
+
+  const loadData = useCallback(async (p: number, f: Filters) => {
+    setLoading(true);
+    try {
+      const [statsData, listData] = await Promise.all([
+        getStats(),
+        getAnalyses(buildApiFilters(f, p)),
+      ]);
+      setStats(statsData);
+      setAnalyses(listData.results);
+      setTotal(listData.count);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildApiFilters]);
+
+  useEffect(() => {
+    loadData(page, filters);
+  }, [page, filters, loadData]);
+
+  const handleFilterChange = <K extends keyof Filters>(key: K, value: Filters[K]) => {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resetFilters = () => {
+    setPage(1);
+    setFilters(DEFAULT_FILTERS);
+  };
+
+  const isFiltered =
+    filters.suitability !== 'all' ||
+    filters.review_completed !== 'all' ||
+    filters.accepted !== 'all';
+
+  const handleReviewChange = async (
+    id: number,
+    field: 'review_completed' | 'client_suitability' | 'accepted',
+    value: boolean | 'High' | 'Medium' | 'Low' | null,
+  ) => {
+    // 낙관적 업데이트
+    setAnalyses((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, [field]: value } : a)),
+    );
+
+    setSaving((prev) => new Set(prev).add(id));
+    try {
+      const updated = await updateReview(id, { [field]: value });
+      // 서버 응답으로 최종 동기화
+      setAnalyses((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+      // 심사 통계 카드 갱신
+      const newStats = await getStats();
+      setStats(newStats);
+    } catch {
+      // 실패 시 원래 데이터로 되돌리기 위해 재조회
+      const listData = await getAnalyses(buildApiFilters(filters, page));
+      setAnalyses(listData.results);
+    } finally {
+      setSaving((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* 헤더 */}
+      <div>
+        <h1 className="text-2xl font-bold">심사 현황</h1>
+        <p className="text-gray-500 text-sm mt-1">
+          AI 분석 결과를 바탕으로 로앤굿 심사 결과와 수임 여부를 관리합니다
+        </p>
+      </div>
+
+      {/* 요약 카드 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard icon="📋" label="전체 케이스" value={stats?.total_analyzed ?? '-'} sub="건" />
+        <StatsCard icon="✅" label="심사 완료" value={stats?.total_reviewed ?? '-'} sub="건" />
+        <StatsCard icon="🎯" label="수임 통과" value={stats?.total_accepted ?? '-'} sub="건" />
+        <StatsCard
+          icon="📊"
+          label="통과율"
+          value={stats ? `${stats.acceptance_rate}%` : '-'}
+          sub="심사 완료 대비"
+        />
+      </div>
+
+      {/* 필터 바 */}
+      <div className="bg-white rounded-xl border border-[var(--color-border)] px-5 py-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <FilterToggle
+            label="AI 적합도"
+            value={filters.suitability}
+            onChange={(v) => handleFilterChange('suitability', v)}
+            options={[
+              { value: 'all', label: '전체' },
+              { value: 'High', label: 'High' },
+              { value: 'Medium', label: 'Medium' },
+              { value: 'Low', label: 'Low' },
+            ]}
+          />
+          <FilterToggle
+            label="심사완료"
+            value={filters.review_completed}
+            onChange={(v) => handleFilterChange('review_completed', v)}
+            options={[
+              { value: 'all', label: '전체' },
+              { value: 'true', label: '완료' },
+              { value: 'false', label: '미완료' },
+            ]}
+          />
+          <FilterToggle
+            label="통과여부"
+            value={filters.accepted}
+            onChange={(v) => handleFilterChange('accepted', v)}
+            options={[
+              { value: 'all', label: '전체' },
+              { value: 'true', label: '통과' },
+              { value: 'false', label: '미통과' },
+            ]}
+          />
+          {isFiltered && (
+            <button
+              onClick={resetFilters}
+              className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 ml-auto"
+            >
+              필터 초기화
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 심사 현황 테이블 */}
+      <div className="bg-white rounded-xl border border-[var(--color-border)]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+          <h3 className="text-sm font-semibold">
+            사건 목록
+            {isFiltered && (
+              <span className="ml-2 text-xs font-normal text-[var(--color-gold)]">필터 적용 중</span>
+            )}
+          </h3>
+          <span className="text-xs text-gray-400">총 {total}건</span>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-gray-400 text-sm">로딩 중...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-gray-500 bg-gray-50">
+                  <th className="px-4 py-3 font-medium">AI 적합도</th>
+                  <th className="px-4 py-3 font-medium">기사 제목</th>
+                  <th className="px-4 py-3 font-medium">분야</th>
+                  <th className="px-4 py-3 font-medium">로앤굿 심사결과</th>
+                  <th className="px-4 py-3 font-medium text-center">심사완료</th>
+                  <th className="px-4 py-3 font-medium text-center">통과여부</th>
+                  <th className="px-4 py-3 font-medium">날짜</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analyses.map((a) => {
+                  const isSaving = saving.has(a.id);
+                  return (
+                    <tr
+                      key={a.id}
+                      className={`border-b last:border-0 transition-colors ${isSaving ? 'opacity-60' : 'hover:bg-gray-50'}`}
+                    >
+                      {/* AI 적합도 */}
+                      <td className="px-4 py-3">
+                        <SuitabilityBadge value={a.suitability} />
+                      </td>
+
+                      {/* 기사 제목 */}
+                      <td className="px-4 py-3 max-w-xs">
+                        <Link
+                          to={`/analyses/${a.id}`}
+                          className="hover:text-blue-600 line-clamp-2 leading-snug"
+                        >
+                          {a.article_title}
+                        </Link>
+                      </td>
+
+                      {/* 분야 */}
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {a.case_category}
+                      </td>
+
+                      {/* 로앤굿 심사결과 셀렉트 */}
+                      <td className="px-4 py-3">
+                        <ClientSuitabilitySelect
+                          value={a.client_suitability}
+                          onChange={(v) => handleReviewChange(a.id, 'client_suitability', v)}
+                          disabled={isSaving}
+                        />
+                      </td>
+
+                      {/* 심사완료 체크박스 */}
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={a.review_completed}
+                          disabled={isSaving}
+                          onChange={(e) =>
+                            handleReviewChange(a.id, 'review_completed', e.target.checked)
+                          }
+                          className="w-4 h-4 accent-[var(--color-navy)] cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+
+                      {/* 통과여부 체크박스 */}
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={a.accepted}
+                          disabled={isSaving || !a.review_completed}
+                          title={!a.review_completed ? '심사 완료 후 체크 가능합니다' : undefined}
+                          onChange={(e) =>
+                            handleReviewChange(a.id, 'accepted', e.target.checked)
+                          }
+                          className="w-4 h-4 accent-[var(--color-gold)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                        />
+                      </td>
+
+                      {/* 날짜 */}
+                      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                        {a.published_at?.slice(0, 10)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {analyses.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-gray-400">
+                      분석 데이터가 없습니다
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* 페이지네이션 */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--color-border)]">
+            <span className="text-xs text-gray-500">
+              {page} / {totalPages} 페이지
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+              >
+                이전
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
