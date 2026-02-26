@@ -82,7 +82,21 @@ class Analysis(models.Model):
     case_category = models.CharField("사건 분야", max_length=100, db_index=True)
     defendant = models.CharField("상대방", max_length=200, blank=True, default="")
     damage_amount = models.CharField("피해 규모(금액)", max_length=200, blank=True, default="")
+    damage_amount_num = models.BigIntegerField(
+        "피해 규모(원)",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="파싱된 숫자 (원 단위). 미상이면 null.",
+    )
     victim_count = models.CharField("피해자 수", max_length=200, blank=True, default="")
+    victim_count_num = models.IntegerField(
+        "피해자 수(숫자)",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="파싱된 숫자. 미상이면 null.",
+    )
     stage = models.CharField(
         "진행 단계",
         max_length=50,

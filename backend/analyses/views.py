@@ -154,7 +154,13 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
     ]
 
     # 정렬 가능 필드 — ?ordering= 파라미터로 정렬 기준 변경 가능
-    ordering_fields = ["analyzed_at", "article__published_at", "suitability"]
+    ordering_fields = [
+        "analyzed_at",
+        "article__published_at",
+        "suitability",
+        "damage_amount_num",   # 피해 규모 큰 순 정렬
+        "victim_count_num",    # 피해자 많은 순 정렬
+    ]
 
     # 기본 정렬 — 분석 완료일 기준 최신순
     ordering = ["-analyzed_at"]

@@ -100,6 +100,19 @@ export default function AnalysisList() {
             <option value="종결">종결</option>
           </select>
         </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">정렬</label>
+          <select
+            className="border rounded px-3 py-1.5 text-sm"
+            value={filters.ordering || '-analyzed_at'}
+            onChange={(e) => setFilter('ordering', e.target.value)}
+          >
+            <option value="-analyzed_at">최신 분석순</option>
+            <option value="-article__published_at">최신 기사순</option>
+            <option value="-damage_amount_num">피해 규모 큰 순</option>
+            <option value="-victim_count_num">피해자 많은 순</option>
+          </select>
+        </div>
         <label className="flex items-center gap-1.5 text-sm cursor-pointer">
           <input
             type="checkbox"

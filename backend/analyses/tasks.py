@@ -1,6 +1,7 @@
 """LLM 분석 Celery 태스크"""
 
 import logging
+import re
 from difflib import SequenceMatcher
 
 from celery import shared_task
@@ -25,6 +26,121 @@ _CASE_STOPWORDS = {
     "민원", "접수", "안내", "경고", "주의", "예방", "위반", "혐의",
     "의혹", "인상", "인하", "확대", "축소", "폭리", "피싱", "스미싱",
 }
+
+
+def parse_damage_amount(text: str) -> int | None:
+    """
+    피해 규모 텍스트를 원(KRW) 단위 정수로 파싱.
+    파싱 불가(미상, 빈값 등)이면 None 반환.
+
+    예시:
+      "약 500억원"        → 50_000_000_000
+      "1,200만원"         → 12_000_000
+      "2조 3천억원"        → 2_300_000_000_000
+      "수백억 원대", "미상" → None
+    """
+    if not text or not isinstance(text, str):
+        return None
+
+    text = text.strip()
+    # 미상 / 불명 / 알 수 없음 등
+    if re.search(r"미상|불명|알\s*수\s*없|불확실|확인\s*안\s*됨|확인\s*불가", text):
+        return None
+
+    # 숫자가 전혀 없으면 파싱 불가
+    if not re.search(r"\d", text):
+        return None
+
+    try:
+        # 쉼표, 공백 정규화
+        t = re.sub(r",", "", text)
+
+        total = 0
+
+        # 조 단위 (1조 = 1,000,000,000,000원)
+        m = re.search(r"([\d.]+)\s*조", t)
+        if m:
+            total += int(float(m.group(1)) * 1_000_000_000_000)
+
+        # 억 단위 (1억 = 100,000,000원)
+        m = re.search(r"([\d.]+)\s*억", t)
+        if m:
+            total += int(float(m.group(1)) * 100_000_000)
+
+        # 천 단위 (1천 = 1,000원, 단독으로 쓰인 경우 — 억/조 없을 때)
+        m = re.search(r"([\d.]+)\s*천\s*(?:만|원)", t)
+        if m:
+            unit = 10_000 if "만" in t[m.end() - 1:m.end() + 1] else 1_000
+            total += int(float(m.group(1)) * unit)
+
+        # 만 단위 (1만 = 10,000원)
+        m = re.search(r"([\d.]+)\s*만", t)
+        if m:
+            total += int(float(m.group(1)) * 10_000)
+
+        # 순수 원 단위 (억/만 단위가 없고 숫자+원만 있는 경우)
+        if total == 0:
+            m = re.search(r"([\d.]+)\s*원", t)
+            if m:
+                total += int(float(m.group(1)))
+
+        return total if total > 0 else None
+
+    except (ValueError, OverflowError):
+        return None
+
+
+def parse_victim_count(text: str) -> int | None:
+    """
+    피해자 수 텍스트를 정수로 파싱.
+    파싱 불가(미상, 빈값 등)이면 None 반환.
+
+    예시:
+      "약 1만 2천명"  → 12_000
+      "50명 이상"     → 50
+      "약 3만명"      → 30_000
+      "미상"          → None
+    """
+    if not text or not isinstance(text, str):
+        return None
+
+    text = text.strip()
+    if re.search(r"미상|불명|알\s*수\s*없|불확실|확인\s*안\s*됨|확인\s*불가", text):
+        return None
+
+    if not re.search(r"\d", text):
+        return None
+
+    try:
+        t = re.sub(r",", "", text)
+
+        total = 0
+
+        # 만 단위
+        m = re.search(r"([\d.]+)\s*만", t)
+        if m:
+            total += int(float(m.group(1)) * 10_000)
+
+        # 천 단위
+        m = re.search(r"([\d.]+)\s*천", t)
+        if m:
+            total += int(float(m.group(1)) * 1_000)
+
+        # 백 단위
+        m = re.search(r"([\d.]+)\s*백", t)
+        if m:
+            total += int(float(m.group(1)) * 100)
+
+        # 순수 숫자 (만/천 단위 없을 때)
+        if total == 0:
+            m = re.search(r"(\d+)", t)
+            if m:
+                total += int(m.group(1))
+
+        return total if total > 0 else None
+
+    except (ValueError, OverflowError):
+        return None
 
 
 def call_openai(messages: list[dict]) -> tuple[str, int, int]:
@@ -209,6 +325,9 @@ def analyze_single_article(article: Article) -> bool:
 
     used_model = settings.GEMINI_MODEL if primary == call_gemini else settings.LLM_MODEL
 
+    damage_amount_text = parsed.get("damage_amount", "미상")
+    victim_count_text = parsed.get("victim_count", "미상")
+
     Analysis.objects.update_or_create(
         article=article,
         defaults=dict(
@@ -217,8 +336,10 @@ def analyze_single_article(article: Article) -> bool:
             suitability_reason=parsed["suitability_reason"],
             case_category=parsed["case_category"],
             defendant=parsed.get("defendant", ""),
-            damage_amount=parsed.get("damage_amount", "미상"),
-            victim_count=parsed.get("victim_count", "미상"),
+            damage_amount=damage_amount_text,
+            damage_amount_num=parse_damage_amount(damage_amount_text),
+            victim_count=victim_count_text,
+            victim_count_num=parse_victim_count(victim_count_text),
             stage=parsed.get("stage", ""),
             stage_detail=parsed.get("stage_detail", ""),
             summary=parsed["summary"],
