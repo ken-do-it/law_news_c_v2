@@ -193,11 +193,23 @@ export default function Dashboard() {
         <p className="text-xs font-semibold text-gray-300 uppercase tracking-widest mb-3">
           AI 분석 현황
         </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <KpiCard
-            label="전체 분석 완료"
-            value={total.toLocaleString()}
+            label="오늘 수집"
+            value={stats.today_collected.toLocaleString()}
+            sub="건 신규 기사"
+            accent="#3B82F6"
+          />
+          <KpiCard
+            label="분석 대기"
+            value={stats.pending_count.toLocaleString()}
             sub="건"
+            accent="#F59E0B"
+          />
+          <KpiCard
+            label="분석 완료"
+            value={total.toLocaleString()}
+            sub="전체 누적"
             accent="#0F172A"
           />
           <KpiCard
@@ -211,12 +223,6 @@ export default function Dashboard() {
             value={mediumCount.toLocaleString()}
             sub={`전체의 ${mediumPct}%`}
             accent="#D97706"
-          />
-          <KpiCard
-            label="오늘 수집"
-            value={stats.today_collected}
-            sub="건 신규 기사"
-            accent="#3B82F6"
           />
         </div>
       </div>
