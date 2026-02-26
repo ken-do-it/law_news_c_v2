@@ -1,9 +1,14 @@
 """크롤링 Celery 태스크"""
 
 import logging
+from difflib import SequenceMatcher
 
 from celery import shared_task
 from django.db import IntegrityError
+
+# 같은 날 발행된 기사 중 제목 유사도가 이 값 이상이면 중복으로 판단하여 스킵
+# 0.85: 완전히 동일한 기사가 다른 URL(예: 네이버 vs 원본)로 들어오는 경우만 차단
+TITLE_DEDUP_THRESHOLD = 0.85
 
 from articles.crawlers import (
     clean_html,
@@ -55,7 +60,7 @@ def crawl_news(self):
             if not article_url:
                 continue
 
-            # 중복 체크
+            # 중복 체크 (URL 기준)
             if Article.objects.filter(url=article_url).exists():
                 continue
 
@@ -63,6 +68,19 @@ def crawl_news(self):
             title = clean_html(item.get("title", ""))
             description = clean_html(item.get("description", ""))
             pub_date = parse_naver_date(item.get("pubDate", ""))
+
+            # 같은 날 거의 동일한 제목 중복 스킵
+            # (같은 기사가 네이버 뉴스 URL과 원본 URL 두 가지로 수집될 때 방지)
+            pub_date_only = pub_date.date() if hasattr(pub_date, "date") else pub_date
+            same_day_titles = Article.objects.filter(
+                published_at__date=pub_date_only
+            ).values_list("title", flat=True)
+            if any(
+                SequenceMatcher(None, title, t).ratio() >= TITLE_DEDUP_THRESHOLD
+                for t in same_day_titles
+            ):
+                logger.debug("유사 제목 중복 스킵: '%s'", title[:60])
+                continue
 
             # 본문 크롤링 (네이버 뉴스 URL인 경우)
             content = ""
