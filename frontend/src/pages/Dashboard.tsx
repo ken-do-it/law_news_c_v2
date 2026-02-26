@@ -5,15 +5,47 @@ import {
   AreaChart, Area, CartesianGrid, Legend, LabelList,
 } from 'recharts';
 import { getStats, getAnalyses } from '../lib/api';
-import type { DashboardStats, Analysis } from '../lib/types';
+import type { DashboardStats, Analysis, SchedulerState } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
 import StageBadge from '../components/StageBadge';
+
+function SchedulerBanner({ state }: { state: SchedulerState | null }) {
+  if (!state) return null;
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  if (state.is_running) {
+    return (
+      <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-sm text-blue-700">
+        <span className="animate-spin">⟳</span>
+        <span className="font-medium">뉴스 수집 및 AI 분석이 진행 중입니다...</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-600">
+      <span>🕐</span>
+      <span>
+        다음 수집 예정:&nbsp;
+        <span className="font-semibold text-gray-800">
+          {state.next_run_at ? fmtTime(state.next_run_at) : '—'}
+        </span>
+      </span>
+      {state.last_run_at && (
+        <span className="text-gray-400 text-xs ml-auto">
+          마지막 수집: {fmtTime(state.last_run_at)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 const SUIT_COLORS: Record<string, string> = {
   High: '#E11D48',
   Medium: '#D97706',
   Low: '#6B7280',
 };
+
+const POLL_INTERVAL_MS = 30_000; // 30초
 
 const RADIAN = Math.PI / 180;
 
@@ -104,9 +136,20 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<Analysis[]>([]);
 
-  useEffect(() => {
+  const refresh = () => {
     getStats().then(setStats);
     getAnalyses({ ordering: '-analyzed_at' }).then((r) => setRecent(r.results.slice(0, 8)));
+  };
+
+  useEffect(() => {
+    refresh();
+
+    // 30초마다 자동 갱신 — 탭이 숨겨지면 폴링 중단
+    const tick = () => {
+      if (!document.hidden) refresh();
+    };
+    const id = setInterval(tick, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, []);
 
   if (!stats) {
@@ -177,6 +220,9 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      {/* 수집 스케줄 상태 배너 */}
+      <SchedulerBanner state={stats.scheduler_state} />
 
       {/* 심사 KPI */}
       <div>

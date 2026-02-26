@@ -36,7 +36,15 @@ def main():
         failed = 0
         for i, article in enumerate(pending, 1):
             t1 = time.time()
-            ok = analyze_single_article(article)
+            try:
+                ok = analyze_single_article(article)
+            except Exception as e:
+                article.status = 'failed'
+                article.retry_count += 1
+                article.save(update_fields=['status', 'retry_count'])
+                ok = False
+                print(f'  [{i}/{total}] ✗ {article.title[:50]}  예외 발생: {e}', flush=True)
+                continue
             elapsed_item = time.time() - t1
             if ok:
                 success += 1

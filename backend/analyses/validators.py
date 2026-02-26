@@ -18,6 +18,17 @@ def validate_and_parse(raw_response: str) -> dict | None:
         logger.error("JSON 파싱 실패: %s", raw_response[:200])
         return None
 
+    # Gemini가 가끔 배열([{...}])로 감싸서 반환하는 경우 첫 번째 요소 추출
+    if isinstance(data, list):
+        if not data:
+            logger.error("LLM이 빈 배열 반환")
+            return None
+        data = data[0]
+
+    if not isinstance(data, dict):
+        logger.error("LLM 응답이 dict가 아님: %s", type(data))
+        return None
+
     # is_relevant 먼저 확인 (비관련 기사는 일부 필드 완화)
     is_relevant = data.get("is_relevant", True)
     if not isinstance(is_relevant, bool):

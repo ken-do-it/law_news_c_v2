@@ -243,6 +243,11 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             suitability="Medium",
         ).count()
 
+        # ── 2-2. 분석 대기 건수 (pending + analyzing) ──
+        pending_count = Article.objects.filter(
+            status__in=["pending", "analyzing"]
+        ).count()
+
         # ── 3. 전체 분석 완료 건수 ──
         total_analyzed = Analysis.objects.count()
 
@@ -316,9 +321,17 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         total_accepted = Analysis.objects.filter(accepted=True).count()
         acceptance_rate = round(total_accepted / total_reviewed * 100) if total_reviewed > 0 else 0
 
+        # ── 9. 스케줄러 상태 (다음 수집 시간 등) ──
+        try:
+            from scheduler.scheduler import get_scheduler_state
+            scheduler_state = get_scheduler_state()
+        except Exception:
+            scheduler_state = None
+
         # 모든 통계 데이터를 JSON으로 반환
         return Response({
             "today_collected": today_collected,
+            "pending_count": pending_count,
             "today_high": today_high,
             "today_medium": today_medium,
             "total_analyzed": total_analyzed,
@@ -329,6 +342,7 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             "total_reviewed": total_reviewed,
             "total_accepted": total_accepted,
             "acceptance_rate": acceptance_rate,
+            "scheduler_state": scheduler_state,
         })
 
     # ── 엑셀 내보내기 API ──
