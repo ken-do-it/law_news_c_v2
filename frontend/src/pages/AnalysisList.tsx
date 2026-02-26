@@ -7,6 +7,14 @@ import SuitabilityBadge from '../components/SuitabilityBadge';
 import StageBadge from '../components/StageBadge';
 import TableSkeleton from '../components/TableSkeleton';
 
+// 목록용 피해액 요약 — 괄호 내용 제거 후 앞부분만 표시
+function shortenDamageAmount(s: string | null | undefined): string {
+  if (!s) return '—';
+  const withoutParen = s.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  if (withoutParen.length <= 14) return withoutParen;
+  return withoutParen.slice(0, 12) + '…';
+}
+
 // 정렬 헤더 컴포넌트
 function SortTh({
   label,
@@ -271,7 +279,12 @@ export default function AnalysisList() {
                       <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap max-w-[120px] truncate">{a.case_category}</td>
                       <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.victim_count || '—'}</td>
                       <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap max-w-[130px] truncate">{a.defendant || '—'}</td>
-                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.damage_amount || '—'}</td>
+                      <td
+                        className="px-3 py-2.5 text-gray-600 whitespace-nowrap max-w-[110px] truncate"
+                        title={a.damage_amount || undefined}
+                      >
+                        {shortenDamageAmount(a.damage_amount)}
+                      </td>
                       <td className="px-3 py-2.5 whitespace-nowrap"><StageBadge value={a.stage} /></td>
                       {/* 케이스 ID — 클릭하면 해당 케이스 검색 */}
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">

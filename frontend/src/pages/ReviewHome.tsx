@@ -352,7 +352,7 @@ export default function ReviewHome() {
         {loading ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <tbody><TableSkeleton cols={7} rows={10} /></tbody>
+              <tbody><TableSkeleton cols={8} rows={10} /></tbody>
             </table>
           </div>
         ) : (
@@ -360,13 +360,14 @@ export default function ReviewHome() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-gray-500 bg-gray-50">
-                  <th className="px-4 py-3 font-medium">AI 적합도</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">AI 적합도</th>
                   <th className="px-4 py-3 font-medium">기사 제목</th>
-                  <th className="px-4 py-3 font-medium">분야</th>
-                  <th className="px-4 py-3 font-medium">로앤굿 심사결과</th>
-                  <th className="px-4 py-3 font-medium text-center">심사완료</th>
-                  <th className="px-4 py-3 font-medium text-center">통과여부</th>
-                  <th className="px-4 py-3 font-medium">날짜</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">분야</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">로앤굿 심사결과</th>
+                  <th className="px-4 py-3 font-medium text-center whitespace-nowrap">심사완료</th>
+                  <th className="px-4 py-3 font-medium text-center whitespace-nowrap">통과여부</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">케이스 ID</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">날짜</th>
                 </tr>
               </thead>
               <tbody>
@@ -433,6 +434,20 @@ export default function ReviewHome() {
                         />
                       </td>
 
+                      {/* 케이스 ID */}
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {a.case_id ? (
+                          <Link
+                            to={`/analyses?search=${encodeURIComponent(a.case_id)}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {a.case_id}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+
                       {/* 날짜 */}
                       <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
                         {a.published_at?.slice(0, 10)}
@@ -442,7 +457,7 @@ export default function ReviewHome() {
                 })}
                 {analyses.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-gray-400">
+                    <td colSpan={8} className="py-12 text-center text-gray-400">
                       분석 데이터가 없습니다
                     </td>
                   </tr>
@@ -452,28 +467,34 @@ export default function ReviewHome() {
           </div>
         )}
 
-        {/* 페이지네이션 */}
+        {/* 페이지네이션 — 숫자로 바로 이동 */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-border">
-            <span className="text-xs text-gray-500">
-              {page} / {totalPages} 페이지
-            </span>
-            <div className="flex gap-2">
+          <div className="flex items-center justify-center gap-1 px-5 py-3 border-t border-border">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1 text-sm rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100"
+            >
+              ‹
+            </button>
+            {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((p) => (
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                key={p}
+                onClick={() => setPage(p)}
+                className={`px-3 py-1 text-sm rounded border border-gray-200 ${
+                  p === page ? 'bg-navy text-white border-navy' : 'hover:bg-gray-100'
+                }`}
               >
-                이전
+                {p}
               </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
-              >
-                다음
-              </button>
-            </div>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1 text-sm rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100"
+            >
+              ›
+            </button>
           </div>
         )}
       </div>
