@@ -80,8 +80,15 @@ export interface CaseGroup {
   created_at: string;
 }
 
+export interface SchedulerState {
+  is_running: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+}
+
 export interface DashboardStats {
   today_collected: number;
+  pending_count: number;
   today_high: number;
   today_medium: number;
   total_analyzed: number;
@@ -92,4 +99,5 @@ export interface DashboardStats {
   total_reviewed: number;
   total_accepted: number;
   acceptance_rate: number;
+  scheduler_state: SchedulerState | null;
 }

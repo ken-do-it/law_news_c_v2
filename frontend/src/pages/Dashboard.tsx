@@ -5,15 +5,47 @@ import {
   AreaChart, Area, CartesianGrid, Legend, LabelList,
 } from 'recharts';
 import { getStats, getAnalyses } from '../lib/api';
-import type { DashboardStats, Analysis } from '../lib/types';
+import type { DashboardStats, Analysis, SchedulerState } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
 import StageBadge from '../components/StageBadge';
+
+function SchedulerBanner({ state }: { state: SchedulerState | null }) {
+  if (!state) return null;
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  if (state.is_running) {
+    return (
+      <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-sm text-blue-700">
+        <span className="animate-spin">⟳</span>
+        <span className="font-medium">뉴스 수집 및 AI 분석이 진행 중입니다...</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-600">
+      <span>🕐</span>
+      <span>
+        다음 수집 예정:&nbsp;
+        <span className="font-semibold text-gray-800">
+          {state.next_run_at ? fmtTime(state.next_run_at) : '—'}
+        </span>
+      </span>
+      {state.last_run_at && (
+        <span className="text-gray-400 text-xs ml-auto">
+          마지막 수집: {fmtTime(state.last_run_at)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 const SUIT_COLORS: Record<string, string> = {
   High: '#E11D48',
   Medium: '#D97706',
   Low: '#6B7280',
 };
+
+const POLL_INTERVAL_MS = 30_000; // 30초
 
 const RADIAN = Math.PI / 180;
 
@@ -104,9 +136,20 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<Analysis[]>([]);
 
-  useEffect(() => {
+  const refresh = () => {
     getStats().then(setStats);
     getAnalyses({ ordering: '-analyzed_at' }).then((r) => setRecent(r.results.slice(0, 8)));
+  };
+
+  useEffect(() => {
+    refresh();
+
+    // 30초마다 자동 갱신 — 탭이 숨겨지면 폴링 중단
+    const tick = () => {
+      if (!document.hidden) refresh();
+    };
+    const id = setInterval(tick, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, []);
 
   if (!stats) {
@@ -150,11 +193,23 @@ export default function Dashboard() {
         <p className="text-xs font-semibold text-gray-300 uppercase tracking-widest mb-3">
           AI 분석 현황
         </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <KpiCard
-            label="전체 분석 완료"
-            value={total.toLocaleString()}
+            label="오늘 수집"
+            value={stats.today_collected.toLocaleString()}
+            sub="건 신규 기사"
+            accent="#3B82F6"
+          />
+          <KpiCard
+            label="분석 대기"
+            value={stats.pending_count.toLocaleString()}
             sub="건"
+            accent="#F59E0B"
+          />
+          <KpiCard
+            label="분석 완료"
+            value={total.toLocaleString()}
+            sub="전체 누적"
             accent="#0F172A"
           />
           <KpiCard
@@ -169,14 +224,11 @@ export default function Dashboard() {
             sub={`전체의 ${mediumPct}%`}
             accent="#D97706"
           />
-          <KpiCard
-            label="오늘 수집"
-            value={stats.today_collected}
-            sub="건 신규 기사"
-            accent="#3B82F6"
-          />
         </div>
       </div>
+
+      {/* 수집 스케줄 상태 배너 */}
+      <SchedulerBanner state={stats.scheduler_state} />
 
       {/* 심사 KPI */}
       <div>
