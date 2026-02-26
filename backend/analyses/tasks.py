@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 # 유사도 매칭 임계값
 CASE_SIMILARITY_THRESHOLD = 0.6
 
+# 제목 키워드 기반 그룹 매칭 — 공유 키워드 N개 이상이면 같은 사건 그룹으로 판단
+TITLE_KEYWORD_MATCH_COUNT = 3
+
 # 사건명에서 자주 등장하는 일반 법률/분류 용어 (유사도 매칭 시 제외)
 _CASE_STOPWORDS = {
     "소송", "분쟁", "사건", "피해", "소비자", "유출", "논란", "문제",
@@ -25,6 +28,10 @@ _CASE_STOPWORDS = {
     "판결", "기소", "수사", "검찰", "경찰", "법원", "소송중",
     "민원", "접수", "안내", "경고", "주의", "예방", "위반", "혐의",
     "의혹", "인상", "인하", "확대", "축소", "폭리", "피싱", "스미싱",
+    # 기사 제목에서 그룹핑에 의미 없는 추가 단어
+    "기자", "뉴스", "보도", "취재", "단독", "속보", "긴급", "확인",
+    "발표", "주장", "강조", "밝혀", "지적", "제기", "요구", "촉구",
+    "개선", "추진", "계획", "예정", "전망", "분석", "공개", "제도",
 }
 
 
@@ -150,7 +157,7 @@ def call_openai(messages: list[dict]) -> tuple[str, int, int]:
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
     response = client.chat.completions.create(
         model=settings.LLM_MODEL,
-        messages=messages,
+        messages=messages,  # type: ignore[arg-type]
         temperature=settings.LLM_TEMPERATURE,
         max_tokens=settings.LLM_MAX_TOKENS,
         response_format={"type": "json_object"},
@@ -158,7 +165,7 @@ def call_openai(messages: list[dict]) -> tuple[str, int, int]:
     choice = response.choices[0]
     usage = response.usage
     return (
-        choice.message.content,
+        choice.message.content or "",
         usage.prompt_tokens if usage else 0,
         usage.completion_tokens if usage else 0,
     )
@@ -186,8 +193,8 @@ def call_gemini(messages: list[dict]) -> tuple[str, int, int]:
     usage = response.usage_metadata
     return (
         response.text,
-        usage.prompt_token_count if usage else 0,
-        usage.candidates_token_count if usage else 0,
+        (usage.prompt_token_count or 0) if usage else 0,
+        (usage.candidates_token_count or 0) if usage else 0,
     )
 
 
@@ -230,8 +237,22 @@ def _case_similarity(a: str, b: str) -> float:
     return seq_ratio
 
 
-def find_or_create_case_group(case_name: str) -> CaseGroup | None:
-    """사건명으로 기존 CaseGroup을 찾거나 유사도 매칭 후 새로 생성"""
+def _extract_title_keywords(text: str) -> set[str]:
+    """기사 제목에서 유의미한 키워드 추출 (한글 2자 이상, stopword 제외)"""
+    words = re.findall(r"[가-힣]{2,}", text)
+    return {w for w in words if w not in _CASE_STOPWORDS}
+
+
+def find_or_create_case_group(case_name: str, article_title: str = "") -> CaseGroup | None:
+    """사건명으로 기존 CaseGroup을 찾거나 유사도 매칭 후 새로 생성.
+
+    매칭 순서:
+      1) case_name 정확 일치
+      2) case_name 유사도 매칭 (SequenceMatcher + 토큰 보너스)
+      3) 기사 제목 키워드 겹침 매칭 (case_name 매칭 실패 시 fallback)
+         — 최근 30일 기사 제목과 TITLE_KEYWORD_MATCH_COUNT개 이상 공유 시 같은 그룹
+      4) 새 그룹 생성
+    """
     if not case_name:
         return None
 
@@ -240,10 +261,13 @@ def find_or_create_case_group(case_name: str) -> CaseGroup | None:
     if existing:
         return existing
 
-    # 2) 유사도 매칭 — 기존 그룹명과 비교
+    # 모든 그룹 한 번에 로드 (이후 단계에서 재사용)
+    all_groups = list(CaseGroup.objects.all())
+
+    # 2) case_name 유사도 매칭
     best_match = None
     best_ratio = 0.0
-    for group in CaseGroup.objects.all():
+    for group in all_groups:
         ratio = _case_similarity(case_name, group.name)
         if ratio > best_ratio:
             best_ratio = ratio
@@ -258,7 +282,58 @@ def find_or_create_case_group(case_name: str) -> CaseGroup | None:
         )
         return best_match
 
-    # 3) 새 그룹 생성
+    # 3) 기사 제목 키워드 겹침 매칭 (fallback)
+    #    같은 사건을 다른 언론사가 다른 각도로 보도할 때
+    #    LLM이 다른 case_name을 부여해도 제목 키워드로 묶어줌
+    if article_title and all_groups:
+        from datetime import timedelta
+        from django.utils import timezone
+
+        recent_cutoff = timezone.now() - timedelta(days=30)
+        title_keywords = _extract_title_keywords(article_title)
+
+        if len(title_keywords) >= TITLE_KEYWORD_MATCH_COUNT:
+            # 그룹별 최근 기사 제목을 한 쿼리로 가져옴
+            from django.db.models import Subquery, OuterRef
+            latest_titles = (
+                Analysis.objects.filter(
+                    case_group=OuterRef("pk"),
+                    article__published_at__gte=recent_cutoff,
+                )
+                .order_by("-article__published_at")
+                .values("article__title")[:1]
+            )
+            groups_with_titles = (
+                CaseGroup.objects.filter(id__in=[g.id for g in all_groups])
+                .annotate(latest_title=Subquery(latest_titles))
+                .values("id", "name", "latest_title")
+            )
+
+            best_kw_match = None
+            best_kw_count = 0
+            for g in groups_with_titles:
+                if not g["latest_title"]:
+                    continue
+                group_keywords = _extract_title_keywords(g["latest_title"])
+                shared = title_keywords & group_keywords
+                if len(shared) > best_kw_count:
+                    best_kw_count = len(shared)
+                    best_kw_match = g
+
+            if best_kw_match and best_kw_count >= TITLE_KEYWORD_MATCH_COUNT:
+                group_obj = CaseGroup.objects.get(id=best_kw_match["id"])
+                logger.info(
+                    "기사 제목 키워드 매칭: '%s' → '%s' (공유키워드 %d개: %s)",
+                    article_title[:50],
+                    best_kw_match["name"],
+                    best_kw_count,
+                    ", ".join(
+                        title_keywords & _extract_title_keywords(best_kw_match["latest_title"])
+                    ),
+                )
+                return group_obj
+
+    # 4) 새 그룹 생성
     case_id = CaseGroup.generate_next_case_id()
     return CaseGroup.objects.create(case_id=case_id, name=case_name)
 
@@ -321,7 +396,10 @@ def analyze_single_article(article: Article) -> bool:
         return False
 
     # 사건 그룹 연결
-    case_group = find_or_create_case_group(parsed.get("case_name", ""))
+    case_group = find_or_create_case_group(
+        parsed.get("case_name", ""),
+        article_title=article.title,
+    )
 
     used_model = settings.GEMINI_MODEL if primary == call_gemini else settings.LLM_MODEL
 
