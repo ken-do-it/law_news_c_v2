@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getAnalysis, reanalyze, downloadExcel } from '../lib/api';
+import { getAnalysis, reanalyze, downloadExcel, updateReview } from '../lib/api';
 import type { Analysis } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
 import StageBadge from '../components/StageBadge';
+import ClientSuitabilityButtons from '../components/ClientSuitabilityButtons';
+import { useToast } from '../components/Toast';
 
 const reasonBg: Record<string, string> = {
   High: 'rgba(225,29,72,0.04)',
@@ -13,14 +15,31 @@ const reasonBg: Record<string, string> = {
 
 export default function AnalysisDetail() {
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [reviewSaving, setReviewSaving] = useState(false);
 
   useEffect(() => {
     if (id) getAnalysis(Number(id)).then(setAnalysis);
   }, [id]);
 
-  if (!analysis) return <div className="p-8 text-center text-gray-400">로딩 중...</div>;
+  useEffect(() => {
+    if (analysis) {
+      document.title = `${analysis.article_title.slice(0, 40)} | LawNGood`;
+    }
+  }, [analysis]);
+
+  if (!analysis) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="text-gray-200 text-5xl mb-3 animate-pulse">◌</div>
+          <div className="text-gray-400 text-sm">로딩 중...</div>
+        </div>
+      </div>
+    );
+  }
 
   const article = analysis.article;
 
@@ -29,11 +48,38 @@ export default function AnalysisDetail() {
     setReanalyzing(true);
     try {
       await reanalyze(article.id);
-      alert('재분석 요청이 접수되었습니다.');
+      toast('재분석 요청이 접수되었습니다.', 'info');
     } catch {
-      alert('재분석 요청 실패');
+      toast('재분석 요청에 실패했습니다.', 'error');
     } finally {
       setReanalyzing(false);
+    }
+  };
+
+  const handleReviewChange = async (
+    field: 'review_completed' | 'client_suitability' | 'accepted',
+    value: boolean | 'High' | 'Medium' | 'Low' | null,
+  ) => {
+    // 낙관적 업데이트
+    const extraPayload: Partial<Analysis> = {};
+    if (field === 'review_completed' && value === true && !analysis.client_suitability) {
+      extraPayload.client_suitability = analysis.suitability;
+    }
+    setAnalysis((prev) => prev ? { ...prev, [field]: value, ...extraPayload } : prev);
+
+    setReviewSaving(true);
+    try {
+      const updated = await updateReview(Number(id), { [field]: value, ...extraPayload });
+      setAnalysis((prev) => prev ? { ...prev, ...updated } : prev);
+      toast(field === 'accepted' && value ? '수임 통과로 설정되었습니다.' : '심사 상태가 저장되었습니다.');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { accepted?: string[] } } })
+        ?.response?.data?.accepted?.[0];
+      toast(msg ?? '저장에 실패했습니다.', 'error');
+      // 실패 시 원래 값으로 되돌리기
+      getAnalysis(Number(id)).then(setAnalysis);
+    } finally {
+      setReviewSaving(false);
     }
   };
 
@@ -119,14 +165,7 @@ export default function AnalysisDetail() {
                         <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
                           <span>{ra.source_name}</span>
                           <span>{ra.published_at?.slice(0, 10)}</span>
-                          <a
-                            href={ra.article_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-500 hover:underline"
-                          >
-                            원문
-                          </a>
+                          <a href={ra.article_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">원문</a>
                         </div>
                       </div>
                     </div>
@@ -152,6 +191,50 @@ export default function AnalysisDetail() {
             {analysis.case_group && (
               <DetailRow icon="🔗" label="사건 그룹" value={`${analysis.case_group.case_id} — ${analysis.case_group.name}`} />
             )}
+
+            {/* 로앤굿 심사 섹션 */}
+            <div className={`border-t pt-4 space-y-3 ${reviewSaving ? 'opacity-60 pointer-events-none' : ''}`}>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                로앤굿 심사
+                {reviewSaving && <span className="ml-2 font-normal text-gray-400">저장 중...</span>}
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-xs text-gray-400">심사 결과</div>
+                <ClientSuitabilityButtons
+                  value={analysis.client_suitability}
+                  onChange={(v) => handleReviewChange('client_suitability', v)}
+                  disabled={reviewSaving}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={analysis.review_completed}
+                    onChange={(e) => handleReviewChange('review_completed', e.target.checked)}
+                    className="w-6 h-6 accent-navy cursor-pointer"
+                  />
+                  <span className="text-sm">심사 완료</span>
+                </label>
+                <label
+                  className={`flex items-center gap-2 select-none ${
+                    analysis.review_completed ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'
+                  }`}
+                  title={!analysis.review_completed ? '심사 완료 후 체크 가능합니다' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={analysis.accepted}
+                    disabled={!analysis.review_completed || reviewSaving}
+                    onChange={(e) => handleReviewChange('accepted', e.target.checked)}
+                    className="w-6 h-6 accent-gold cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <span className="text-sm">통과</span>
+                </label>
+              </div>
+            </div>
 
             <div className="border-t pt-4 space-y-2">
               <button

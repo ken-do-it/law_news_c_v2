@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { getKeywords, createKeyword, deleteKeyword } from '../lib/api';
 import type { Keyword } from '../lib/types';
+import { useToast } from '../components/Toast';
 
 export default function Settings() {
+  const { toast } = useToast();
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [newWord, setNewWord] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => { document.title = '키워드 관리 | LawNGood'; }, []);
 
   const fetchKeywords = async () => {
     const data = await getKeywords();
@@ -21,20 +25,22 @@ export default function Settings() {
       await createKeyword(newWord.trim());
       setNewWord('');
       await fetchKeywords();
+      toast('키워드가 추가되었습니다.');
     } catch {
-      alert('키워드 추가 실패');
+      toast('키워드 추가에 실패했습니다.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('정말 삭제하시겠습니까?')) return;
+    if (!window.confirm('정말 삭제하시겠습니까?')) return;
     try {
       await deleteKeyword(id);
       await fetchKeywords();
+      toast('키워드가 삭제되었습니다.', 'info');
     } catch {
-      alert('삭제 실패');
+      toast('삭제에 실패했습니다.', 'error');
     }
   };
 

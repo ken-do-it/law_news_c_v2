@@ -175,6 +175,7 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         "suitability",
         "damage_amount_num",   # 피해 규모 큰 순 정렬
         "victim_count_num",    # 피해자 많은 순 정렬
+        "review_completed",    # 미심사 먼저 정렬용
     ]
 
     # 기본 정렬 — 분석 완료일 기준 최신순

@@ -5,6 +5,7 @@ import type { AnalysisFilters, ReviewPayload } from '../lib/api';
 import type { Analysis, DashboardStats } from '../lib/types';
 import StatsCard from '../components/StatsCard';
 import SuitabilityBadge from '../components/SuitabilityBadge';
+import TableSkeleton from '../components/TableSkeleton';
 
 const SUITABILITY_OPTIONS = ['High', 'Medium', 'Low'] as const;
 
@@ -124,12 +125,14 @@ interface Filters {
   suitability: string[];   // 다중 선택 (빈 배열 = 전체)
   review_completed: BoolFilter;
   accepted: BoolFilter;
+  unreviewed_first: boolean;
 }
 
 const DEFAULT_FILTERS: Filters = {
   suitability: [],
   review_completed: 'all',
   accepted: 'all',
+  unreviewed_first: false,
 };
 
 export default function ReviewHome() {
@@ -149,13 +152,17 @@ export default function ReviewHome() {
       suitability: suitabilityParam ? [suitabilityParam] : [],
       review_completed: 'all',
       accepted: 'all',
+      unreviewed_first: false,
     };
   });
 
   const PAGE_SIZE = 20;
 
   const buildApiFilters = useCallback((f: Filters, p: number): AnalysisFilters => {
-    const params: AnalysisFilters = { ordering: '-analyzed_at', page: p };
+    const params: AnalysisFilters = {
+      ordering: f.unreviewed_first ? 'review_completed,-analyzed_at' : '-analyzed_at',
+      page: p,
+    };
     if (f.suitability.length > 0) params.suitability = f.suitability.join(',');
     if (f.review_completed !== 'all') params.review_completed = f.review_completed === 'true';
     if (f.accepted !== 'all') params.accepted = f.accepted === 'true';
@@ -204,10 +211,17 @@ export default function ReviewHome() {
     setFilters(DEFAULT_FILTERS);
   };
 
+  useEffect(() => { document.title = '심사 현황 | LawNGood'; }, []);
+
   const isFiltered =
     filters.suitability.length > 0 ||
     filters.review_completed !== 'all' ||
     filters.accepted !== 'all';
+
+  const toggleUnreviewedFirst = () => {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, unreviewed_first: !prev.unreviewed_first }));
+  };
 
   const handleReviewChange = async (
     id: number,
@@ -300,7 +314,19 @@ export default function ReviewHome() {
               { value: 'false', label: '미통과' },
             ]}
           />
-          {isFiltered && (
+          {/* 미심사 먼저 토글 */}
+          <button
+            onClick={toggleUnreviewedFirst}
+            className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
+              filters.unreviewed_first
+                ? 'bg-[var(--color-navy)] text-white border-[var(--color-navy)] font-semibold'
+                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            미심사 먼저
+          </button>
+
+          {(isFiltered || filters.unreviewed_first) && (
             <button
               onClick={resetFilters}
               className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 ml-auto"
@@ -324,7 +350,11 @@ export default function ReviewHome() {
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">로딩 중...</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody><TableSkeleton cols={7} rows={10} /></tbody>
+            </table>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
