@@ -46,6 +46,9 @@ export interface Analysis {
   is_relevant: boolean;
   analyzed_at: string;
   related_count: number;
+  review_completed: boolean;
+  client_suitability: 'High' | 'Medium' | 'Low' | null;
+  accepted: boolean;
 
   article: Article;
   case_group: CaseGroup | null;
@@ -84,6 +87,9 @@ export interface DashboardStats {
   total_analyzed: number;
   monthly_cost: number;
   suitability_distribution: { name: string; value: number }[];
-  category_distribution: { name: string; count: number }[];
+  category_distribution: { name: string; count: number; high: number; medium: number; low: number }[];
   weekly_trend: { date: string; total: number; high: number; medium: number }[];
+  total_reviewed: number;
+  total_accepted: number;
+  acceptance_rate: number;
 }

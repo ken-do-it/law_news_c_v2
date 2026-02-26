@@ -43,6 +43,9 @@ class AnalysisListSerializer(serializers.ModelSerializer):
             "is_relevant",
             "analyzed_at",
             "related_count",
+            "review_completed",
+            "client_suitability",
+            "accepted",
         ]
 
     def get_source_name(self, obj):
@@ -62,6 +65,27 @@ class RelatedArticleSerializer(serializers.ModelSerializer):
 
     def get_source_name(self, obj):
         return obj.article.source.name if obj.article.source else ""
+
+
+class AnalysisReviewSerializer(serializers.ModelSerializer):
+    """심사 필드 부분 업데이트 전용 시리얼라이저 (PATCH)"""
+
+    class Meta:
+        model = Analysis
+        fields = ["review_completed", "client_suitability", "accepted"]
+
+    def validate(self, attrs):
+        instance = self.instance
+        accepted = attrs.get("accepted", instance.accepted if instance else False)
+        review_completed = attrs.get(
+            "review_completed",
+            instance.review_completed if instance else False,
+        )
+        if accepted and not review_completed:
+            raise serializers.ValidationError(
+                {"accepted": "심사 완료 이후에만 통과 처리할 수 있습니다."}
+            )
+        return attrs
 
 
 class AnalysisDetailSerializer(serializers.ModelSerializer):
@@ -90,6 +114,9 @@ class AnalysisDetailSerializer(serializers.ModelSerializer):
             "completion_tokens",
             "analyzed_at",
             "related_articles",
+            "review_completed",
+            "client_suitability",
+            "accepted",
         ]
 
     def get_related_articles(self, obj):
