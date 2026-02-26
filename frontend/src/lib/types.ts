@@ -87,7 +87,7 @@ export interface DashboardStats {
   total_analyzed: number;
   monthly_cost: number;
   suitability_distribution: { name: string; value: number }[];
-  category_distribution: { name: string; count: number }[];
+  category_distribution: { name: string; count: number; high: number; medium: number; low: number }[];
   weekly_trend: { date: string; total: number; high: number; medium: number }[];
   total_reviewed: number;
   total_accepted: number;

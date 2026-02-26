@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { getAnalyses, getStats, updateReview } from '../lib/api';
-import type { AnalysisFilters } from '../lib/api';
+import type { AnalysisFilters, ReviewPayload } from '../lib/api';
 import type { Analysis, DashboardStats } from '../lib/types';
 import StatsCard from '../components/StatsCard';
 import SuitabilityBadge from '../components/SuitabilityBadge';
@@ -14,6 +14,7 @@ const SUIT_CONFIG = {
   Low:    { solid: '#6B7280', light: 'rgba(107,114,128,0.10)', text: '#4B5563' },
 } as const;
 
+// ── 로앤굿 심사결과 컬러 버튼 ──
 function ClientSuitabilityButtons({
   value,
   onChange,
@@ -48,20 +49,43 @@ function ClientSuitabilityButtons({
   );
 }
 
-type SuitabilityFilter = 'all' | 'High' | 'Medium' | 'Low';
-type BoolFilter = 'all' | 'true' | 'false';
-
-interface Filters {
-  suitability: SuitabilityFilter;
-  review_completed: BoolFilter;
-  accepted: BoolFilter;
+// ── AI 적합도 다중 선택 필터 ──
+function SuitabilityMultiFilter({
+  value,
+  onToggle,
+}: {
+  value: string[];
+  onToggle: (opt: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500 whitespace-nowrap">AI 적합도</span>
+      <div className="flex gap-1">
+        {SUITABILITY_OPTIONS.map((opt) => {
+          const isActive = value.includes(opt);
+          const c = SUIT_CONFIG[opt];
+          return (
+            <button
+              key={opt}
+              onClick={() => onToggle(opt)}
+              className="px-3 py-1 text-xs font-semibold rounded transition-all"
+              style={
+                isActive
+                  ? { backgroundColor: c.solid, color: '#fff' }
+                  : { backgroundColor: 'white', color: '#9CA3AF', border: '1px solid #E5E7EB' }
+              }
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
-const DEFAULT_FILTERS: Filters = {
-  suitability: 'all',
-  review_completed: 'all',
-  accepted: 'all',
-};
+// ── 단일 선택 토글 필터 (심사완료, 통과여부) ──
+type BoolFilter = 'all' | 'true' | 'false';
 
 function FilterToggle<T extends string>({
   label,
@@ -96,20 +120,43 @@ function FilterToggle<T extends string>({
   );
 }
 
+interface Filters {
+  suitability: string[];   // 다중 선택 (빈 배열 = 전체)
+  review_completed: BoolFilter;
+  accepted: BoolFilter;
+}
+
+const DEFAULT_FILTERS: Filters = {
+  suitability: [],
+  review_completed: 'all',
+  accepted: 'all',
+};
+
 export default function ReviewHome() {
+  const [searchParams] = useSearchParams();
+
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Set<number>>(new Set());
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+
+  // URL 파라미터로 초기 필터 설정 (대시보드 파이 차트 클릭 연동)
+  const [filters, setFilters] = useState<Filters>(() => {
+    const suitabilityParam = searchParams.get('suitability');
+    return {
+      suitability: suitabilityParam ? [suitabilityParam] : [],
+      review_completed: 'all',
+      accepted: 'all',
+    };
+  });
 
   const PAGE_SIZE = 20;
 
   const buildApiFilters = useCallback((f: Filters, p: number): AnalysisFilters => {
     const params: AnalysisFilters = { ordering: '-analyzed_at', page: p };
-    if (f.suitability !== 'all') params.suitability = f.suitability;
+    if (f.suitability.length > 0) params.suitability = f.suitability.join(',');
     if (f.review_completed !== 'all') params.review_completed = f.review_completed === 'true';
     if (f.accepted !== 'all') params.accepted = f.accepted === 'true';
     return params;
@@ -134,7 +181,20 @@ export default function ReviewHome() {
     loadData(page, filters);
   }, [page, filters, loadData]);
 
-  const handleFilterChange = <K extends keyof Filters>(key: K, value: Filters[K]) => {
+  const handleSuitabilityToggle = (opt: string) => {
+    setPage(1);
+    setFilters((prev) => ({
+      ...prev,
+      suitability: prev.suitability.includes(opt)
+        ? prev.suitability.filter((v) => v !== opt)
+        : [...prev.suitability, opt],
+    }));
+  };
+
+  const handleFilterChange = <K extends keyof Omit<Filters, 'suitability'>>(
+    key: K,
+    value: Filters[K],
+  ) => {
     setPage(1);
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
@@ -145,7 +205,7 @@ export default function ReviewHome() {
   };
 
   const isFiltered =
-    filters.suitability !== 'all' ||
+    filters.suitability.length > 0 ||
     filters.review_completed !== 'all' ||
     filters.accepted !== 'all';
 
@@ -154,21 +214,27 @@ export default function ReviewHome() {
     field: 'review_completed' | 'client_suitability' | 'accepted',
     value: boolean | 'High' | 'Medium' | 'Low' | null,
   ) => {
+    // 심사완료 체크 시 client_suitability 자동 설정 (미선택 상태일 때만)
+    const extraPayload: ReviewPayload = {};
+    if (field === 'review_completed' && value === true) {
+      const analysis = analyses.find((a) => a.id === id);
+      if (analysis && !analysis.client_suitability) {
+        extraPayload.client_suitability = analysis.suitability;
+      }
+    }
+
     // 낙관적 업데이트
     setAnalyses((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, [field]: value } : a)),
+      prev.map((a) => (a.id === id ? { ...a, [field]: value, ...extraPayload } : a)),
     );
 
     setSaving((prev) => new Set(prev).add(id));
     try {
-      const updated = await updateReview(id, { [field]: value });
-      // 서버 응답으로 최종 동기화
+      const updated = await updateReview(id, { [field]: value, ...extraPayload });
       setAnalyses((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
-      // 심사 통계 카드 갱신
       const newStats = await getStats();
       setStats(newStats);
     } catch {
-      // 실패 시 원래 데이터로 되돌리기 위해 재조회
       const listData = await getAnalyses(buildApiFilters(filters, page));
       setAnalyses(listData.results);
     } finally {
@@ -208,17 +274,12 @@ export default function ReviewHome() {
       {/* 필터 바 */}
       <div className="bg-white rounded-xl border border-[var(--color-border)] px-5 py-4">
         <div className="flex flex-wrap items-center gap-4">
-          <FilterToggle
-            label="AI 적합도"
+          {/* AI 적합도 — 다중 선택 */}
+          <SuitabilityMultiFilter
             value={filters.suitability}
-            onChange={(v) => handleFilterChange('suitability', v)}
-            options={[
-              { value: 'all', label: '전체' },
-              { value: 'High', label: 'High' },
-              { value: 'Medium', label: 'Medium' },
-              { value: 'Low', label: 'Low' },
-            ]}
+            onToggle={handleSuitabilityToggle}
           />
+
           <FilterToggle
             label="심사완료"
             value={filters.review_completed}
@@ -315,7 +376,7 @@ export default function ReviewHome() {
                         />
                       </td>
 
-                      {/* 심사완료 체크박스 */}
+                      {/* 심사완료 체크박스 — 2배 크기 */}
                       <td className="px-4 py-3 text-center">
                         <input
                           type="checkbox"
@@ -324,11 +385,11 @@ export default function ReviewHome() {
                           onChange={(e) =>
                             handleReviewChange(a.id, 'review_completed', e.target.checked)
                           }
-                          className="w-4 h-4 accent-[var(--color-navy)] cursor-pointer disabled:cursor-not-allowed"
+                          className="w-6 h-6 accent-[var(--color-navy)] cursor-pointer disabled:cursor-not-allowed"
                         />
                       </td>
 
-                      {/* 통과여부 체크박스 */}
+                      {/* 통과여부 체크박스 — 2배 크기 */}
                       <td className="px-4 py-3 text-center">
                         <input
                           type="checkbox"
@@ -338,7 +399,7 @@ export default function ReviewHome() {
                           onChange={(e) =>
                             handleReviewChange(a.id, 'accepted', e.target.checked)
                           }
-                          className="w-4 h-4 accent-[var(--color-gold)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="w-6 h-6 accent-[var(--color-gold)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         />
                       </td>
 

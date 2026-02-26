@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, Legend, LabelList,
@@ -100,6 +100,7 @@ function KpiCard({
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<Analysis[]>([]);
 
@@ -209,7 +210,10 @@ export default function Dashboard() {
         {/* 소송적합도 도넛 차트 */}
         <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
           <h3 className="text-sm font-semibold text-gray-800 mb-1">소송적합도 분포</h3>
-          <p className="text-xs text-gray-400 mb-3">AI 판단 기준 전체 누적</p>
+          <p className="text-xs text-gray-400 mb-3">
+            AI 판단 기준 전체 누적
+            <span className="ml-2 text-[var(--color-gold)]">클릭하면 심사현황으로 이동</span>
+          </p>
           <div className="relative">
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
@@ -226,15 +230,25 @@ export default function Dashboard() {
                   endAngle={-270}
                   label={PieLabel as never}
                   labelLine={{ stroke: '#D1D5DB', strokeWidth: 1 }}
+                  onClick={(data: { name?: string }) => {
+                    if (data?.name) navigate(`/?suitability=${data.name}`);
+                  }}
+                  style={{ cursor: 'pointer' }}
                 >
                   {stats.suitability_distribution.map((entry) => (
-                    <Cell key={entry.name} fill={SUIT_COLORS[entry.name] ?? '#ccc'} />
+                    <Cell
+                      key={entry.name}
+                      fill={SUIT_COLORS[entry.name] ?? '#ccc'}
+                    />
                   ))}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
                   formatter={(value) => (
-                    <span className="text-xs text-gray-600">{value}</span>
+                    <span className="text-xs text-gray-600 cursor-pointer hover:underline"
+                      onClick={() => navigate(`/?suitability=${value}`)}>
+                      {value}
+                    </span>
                   )}
                 />
               </PieChart>
@@ -252,15 +266,24 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 사건 분야별 가로 바 */}
+        {/* 사건 분야별 누적 스택 바 */}
         <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
           <h3 className="text-sm font-semibold text-gray-800 mb-1">사건 분야별 분포</h3>
-          <p className="text-xs text-gray-400 mb-3">상위 10개 분야</p>
-          <ResponsiveContainer width="100%" height={220}>
+          <p className="text-xs text-gray-400 mb-3">
+            상위 10개 분야
+            <span className="ml-2 text-[var(--color-gold)]">클릭하면 분석 목록으로 이동</span>
+          </p>
+          <ResponsiveContainer width="100%" height={240}>
             <BarChart
               data={stats.category_distribution}
               layout="vertical"
-              margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
+              margin={{ top: 0, right: 52, bottom: 0, left: 0 }}
+              onClick={(data) => {
+                if (data?.activeLabel) {
+                  navigate(`/analyses?case_category=${encodeURIComponent(data.activeLabel)}`);
+                }
+              }}
+              style={{ cursor: 'pointer' }}
             >
               <XAxis
                 type="number"
@@ -277,7 +300,14 @@ export default function Dashboard() {
                 tickLine={false}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" name="건수" fill="#F59E0B" radius={[0, 4, 4, 0]} maxBarSize={13}>
+              <Legend
+                formatter={(value) => (
+                  <span className="text-xs text-gray-600">{value}</span>
+                )}
+              />
+              <Bar dataKey="high" name="High" fill="#E11D48" stackId="stack" maxBarSize={13} />
+              <Bar dataKey="medium" name="Medium" fill="#D97706" stackId="stack" maxBarSize={13} />
+              <Bar dataKey="low" name="Low" fill="#6B7280" stackId="stack" maxBarSize={13} radius={[0, 4, 4, 0]}>
                 <LabelList
                   dataKey="count"
                   position="right"

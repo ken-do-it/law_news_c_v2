@@ -257,26 +257,37 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             (prompt_t * 2.5 / 1_000_000 + completion_t * 10.0 / 1_000_000) * 1400
         )
 
-        # ── 5. 적합도 분포 (파이차트 데이터) ──
-        # values()로 그룹핑 → annotate()로 각 그룹의 건수 집계
+        # ── 5. 적합도 분포 (파이차트 데이터) ── High → Medium → Low 순서 고정
         suit_dist = (
             Analysis.objects.values("suitability")
             .annotate(value=Count("id"))
-            .order_by("suitability")  # 알파벳순: High → Low → Medium
         )
-        # 프론트엔드 Recharts 파이차트에 맞는 형식으로 변환
-        suitability_distribution = [
-            {"name": s["suitability"], "value": s["value"]} for s in suit_dist
-        ]
+        _suit_order = {"High": 0, "Medium": 1, "Low": 2}
+        suitability_distribution = sorted(
+            [{"name": s["suitability"], "value": s["value"]} for s in suit_dist],
+            key=lambda x: _suit_order.get(x["name"], 99),
+        )
 
-        # ── 6. 사건 유형별 분포 상위 10개 (바차트 데이터) ──
+        # ── 6. 사건 유형별 분포 상위 10개 (누적 스택 바 데이터) ──
         cat_dist = (
             Analysis.objects.values("case_category")
-            .annotate(count=Count("id"))
-            .order_by("-count")[:10]  # 건수 내림차순 상위 10개
+            .annotate(
+                count=Count("id"),
+                high=Count("id", filter=Q(suitability="High")),
+                medium=Count("id", filter=Q(suitability="Medium")),
+                low=Count("id", filter=Q(suitability="Low")),
+            )
+            .order_by("-count")[:10]
         )
         category_distribution = [
-            {"name": c["case_category"], "count": c["count"]} for c in cat_dist
+            {
+                "name": c["case_category"],
+                "count": c["count"],
+                "high": c["high"],
+                "medium": c["medium"],
+                "low": c["low"],
+            }
+            for c in cat_dist
         ]
 
         # ── 7. 주간 추이 (최근 7일 라인차트 데이터) ──
