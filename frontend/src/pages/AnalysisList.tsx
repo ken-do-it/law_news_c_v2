@@ -145,47 +145,52 @@ export default function AnalysisList() {
           <div className="p-8 text-center text-gray-400">로딩 중...</div>
         ) : (
           <>
-            <div className="px-4 py-2 text-xs text-gray-500 border-b">
+            <div className="px-4 py-2 text-xs text-gray-400 border-b">
               총 {data?.count || 0}건
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-gray-500 bg-gray-50">
-                    <th className="px-4 py-2">적합도</th>
-                    <th className="px-4 py-2">기사 제목</th>
-                    <th className="px-4 py-2">분야</th>
-                    <th className="px-4 py-2">피해자</th>
-                    <th className="px-4 py-2">상대방</th>
-                    <th className="px-4 py-2">피해액</th>
-                    <th className="px-4 py-2">단계</th>
-                    <th className="px-4 py-2">케이스</th>
-                    <th className="px-4 py-2">날짜</th>
+                  <tr className="border-b text-left bg-gray-50">
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap">적합도</th>
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide">기사 제목</th>
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap">분야</th>
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap">피해자</th>
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap">상대방</th>
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap">피해액</th>
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap">단계</th>
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap">케이스</th>
+                    <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap">날짜</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data?.results.map((a) => (
-                    <tr key={a.id} className={`border-b last:border-0 hover:bg-[#F8FAFC] cursor-pointer ${!a.is_relevant ? 'opacity-50 bg-gray-50' : ''}`}>
-                      <td className="px-4 py-2.5"><SuitabilityBadge value={a.suitability} /></td>
-                      <td className="px-4 py-2.5 max-w-xs">
+                    <tr key={a.id} className={`border-b last:border-0 hover:bg-gray-50 transition-colors ${!a.is_relevant ? 'opacity-50 bg-gray-50' : ''}`}>
+                      {/* 적합도 */}
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <SuitabilityBadge value={a.suitability} />
+                      </td>
+                      {/* 기사 제목 — 유일하게 줄바꿈 허용, 최대 폭 제한 */}
+                      <td className="px-3 py-2.5 min-w-[220px] max-w-[320px]">
                         <div className="flex items-center gap-1.5">
-                          <Link to={`/analyses/${a.id}`} className="hover:text-blue-600 line-clamp-1">
+                          <Link to={`/analyses/${a.id}`} className="hover:text-blue-600 line-clamp-1 leading-snug">
                             {a.article_title}
                           </Link>
                           {(a.related_count ?? 0) > 1 && (
-                            <span className="shrink-0 text-[11px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">
+                            <span className="shrink-0 text-[11px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
                               +{(a.related_count ?? 0) - 1}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600">{a.case_category}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{a.victim_count || '-'}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{a.defendant || '-'}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{a.damage_amount || '-'}</td>
-                      <td className="px-4 py-2.5"><StageBadge value={a.stage} /></td>
-                      <td className="px-4 py-2.5 text-xs text-gray-500">{a.case_id || '-'}</td>
-                      <td className="px-4 py-2.5 text-xs text-gray-400">{a.published_at?.slice(0, 10)}</td>
+                      {/* 나머지 셀 — 모두 whitespace-nowrap */}
+                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap max-w-[120px] truncate">{a.case_category}</td>
+                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.victim_count || '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap max-w-[130px] truncate">{a.defendant || '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{a.damage_amount || '—'}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap"><StageBadge value={a.stage} /></td>
+                      <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{a.case_id || '—'}</td>
+                      <td className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">{a.published_at?.slice(0, 10)}</td>
                     </tr>
                   ))}
                   {data?.results.length === 0 && (
