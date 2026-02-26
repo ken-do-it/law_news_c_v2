@@ -60,11 +60,14 @@ export default function AnalysisList() {
       {/* 필터 바 */}
       <div className="bg-white rounded-xl border border-border p-4 flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">검색</label>
+          <label className="block text-xs text-gray-500 mb-1">
+            검색
+            <span className="ml-1 text-gray-400 font-normal">기사 제목 · 상대방 · 케이스 ID</span>
+          </label>
           <input
             type="text"
-            placeholder="기사 제목, 상대방..."
-            className="border rounded px-3 py-1.5 text-sm w-52"
+            placeholder="예: 쿠팡, CASE-2026-001..."
+            className="border rounded px-3 py-1.5 text-sm w-64"
             defaultValue={filters.search}
             onKeyDown={(e) => {
               if (e.key === 'Enter') setFilter('search', (e.target as HTMLInputElement).value);
@@ -118,7 +121,7 @@ export default function AnalysisList() {
             type="checkbox"
             checked={searchParams.get('group_by_case') !== 'false'}
             onChange={(e) => setFilter('group_by_case', e.target.checked ? '' : 'false')}
-            className="rounded"
+            className="w-6 h-6 accent-navy rounded cursor-pointer"
           />
           사건별 묶기
         </label>
@@ -127,7 +130,7 @@ export default function AnalysisList() {
             type="checkbox"
             checked={filters.include_irrelevant === 'true'}
             onChange={(e) => setFilter('include_irrelevant', e.target.checked ? 'true' : '')}
-            className="rounded"
+            className="w-6 h-6 accent-navy rounded cursor-pointer"
           />
           무관 기사 포함
         </label>

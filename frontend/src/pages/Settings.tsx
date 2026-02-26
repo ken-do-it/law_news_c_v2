@@ -40,9 +40,9 @@ export default function Settings() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">설정</h1>
+      <h1 className="text-2xl font-bold">키워드 관리</h1>
 
-      <div className="bg-white rounded-xl border border-[var(--color-border)] p-6">
+      <div className="bg-white rounded-xl border border-border p-6">
         <h2 className="text-sm font-semibold mb-4">수집 키워드 관리</h2>
         <p className="text-xs text-gray-500 mb-4">뉴스 크롤링에 사용되는 검색 키워드를 관리합니다.</p>
 
@@ -50,7 +50,7 @@ export default function Settings() {
           {keywords.map((kw) => (
             <span
               key={kw.id}
-              className="inline-flex items-center gap-1.5 bg-[var(--color-navy)] text-white text-sm px-3 py-1.5 rounded-full"
+              className="inline-flex items-center gap-1.5 bg-navy text-white text-sm px-3 py-1.5 rounded-full"
             >
               {kw.word}
               <button
@@ -78,7 +78,7 @@ export default function Settings() {
           <button
             onClick={handleAdd}
             disabled={loading}
-            className="bg-[var(--color-gold)] text-white text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50"
+            className="bg-gold text-white text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50"
           >
             + 추가
           </button>
