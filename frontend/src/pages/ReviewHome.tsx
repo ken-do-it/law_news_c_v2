@@ -8,7 +8,13 @@ import SuitabilityBadge from '../components/SuitabilityBadge';
 
 const SUITABILITY_OPTIONS = ['High', 'Medium', 'Low'] as const;
 
-function ClientSuitabilitySelect({
+const SUIT_CONFIG = {
+  High:   { solid: '#E11D48', light: 'rgba(225,29,72,0.10)',   text: '#E11D48' },
+  Medium: { solid: '#D97706', light: 'rgba(217,119,6,0.10)',   text: '#C05621' },
+  Low:    { solid: '#6B7280', light: 'rgba(107,114,128,0.10)', text: '#4B5563' },
+} as const;
+
+function ClientSuitabilityButtons({
   value,
   onChange,
   disabled,
@@ -17,28 +23,28 @@ function ClientSuitabilitySelect({
   onChange: (v: 'High' | 'Medium' | 'Low' | null) => void;
   disabled?: boolean;
 }) {
-  const colorMap: Record<string, string> = {
-    High: 'text-[var(--color-high)]',
-    Medium: 'text-[var(--color-medium)]',
-    Low: 'text-[var(--color-low)]',
-  };
   return (
-    <select
-      value={value ?? ''}
-      onChange={(e) => {
-        const v = e.target.value as 'High' | 'Medium' | 'Low' | '';
-        onChange(v === '' ? null : v);
-      }}
-      disabled={disabled}
-      className={`text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-gold)] disabled:opacity-40 disabled:cursor-not-allowed ${value ? colorMap[value] : 'text-gray-400'}`}
-    >
-      <option value="">미선택</option>
-      {SUITABILITY_OPTIONS.map((opt) => (
-        <option key={opt} value={opt} className={colorMap[opt]}>
-          {opt}
-        </option>
-      ))}
-    </select>
+    <div className={`flex gap-1 ${disabled ? 'opacity-40 pointer-events-none' : ''}`}>
+      {SUITABILITY_OPTIONS.map((opt) => {
+        const isSelected = value === opt;
+        const c = SUIT_CONFIG[opt];
+        return (
+          <button
+            key={opt}
+            onClick={() => onChange(isSelected ? null : opt)}
+            title={isSelected ? '클릭하여 해제' : opt}
+            className="text-xs px-2.5 py-1 rounded font-semibold transition-all whitespace-nowrap"
+            style={
+              isSelected
+                ? { backgroundColor: c.solid, color: '#fff' }
+                : { backgroundColor: c.light, color: c.text }
+            }
+          >
+            {opt}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -300,9 +306,9 @@ export default function ReviewHome() {
                         {a.case_category}
                       </td>
 
-                      {/* 로앤굿 심사결과 셀렉트 */}
+                      {/* 로앤굿 심사결과 버튼 */}
                       <td className="px-4 py-3">
-                        <ClientSuitabilitySelect
+                        <ClientSuitabilityButtons
                           value={a.client_suitability}
                           onChange={(v) => handleReviewChange(a.id, 'client_suitability', v)}
                           disabled={isSaving}
