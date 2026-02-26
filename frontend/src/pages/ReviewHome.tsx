@@ -108,7 +108,7 @@ function FilterToggle<T extends string>({
             onClick={() => onChange(opt.value)}
             className={`px-3 py-1 text-xs transition-colors ${
               value === opt.value
-                ? 'bg-[var(--color-navy)] text-white font-semibold'
+                ? 'bg-navy text-white font-semibold'
                 : 'bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
@@ -272,7 +272,7 @@ export default function ReviewHome() {
       </div>
 
       {/* 필터 바 */}
-      <div className="bg-white rounded-xl border border-[var(--color-border)] px-5 py-4">
+      <div className="bg-white rounded-xl border border-border px-5 py-4">
         <div className="flex flex-wrap items-center gap-4">
           {/* AI 적합도 — 다중 선택 */}
           <SuitabilityMultiFilter
@@ -312,12 +312,12 @@ export default function ReviewHome() {
       </div>
 
       {/* 심사 현황 테이블 */}
-      <div className="bg-white rounded-xl border border-[var(--color-border)]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+      <div className="bg-white rounded-xl border border-border">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h3 className="text-sm font-semibold">
             사건 목록
             {isFiltered && (
-              <span className="ml-2 text-xs font-normal text-[var(--color-gold)]">필터 적용 중</span>
+              <span className="ml-2 text-xs font-normal text-gold">필터 적용 중</span>
             )}
           </h3>
           <span className="text-xs text-gray-400">총 {total}건</span>
@@ -385,7 +385,7 @@ export default function ReviewHome() {
                           onChange={(e) =>
                             handleReviewChange(a.id, 'review_completed', e.target.checked)
                           }
-                          className="w-6 h-6 accent-[var(--color-navy)] cursor-pointer disabled:cursor-not-allowed"
+                          className="w-6 h-6 accent-navy cursor-pointer disabled:cursor-not-allowed"
                         />
                       </td>
 
@@ -399,7 +399,7 @@ export default function ReviewHome() {
                           onChange={(e) =>
                             handleReviewChange(a.id, 'accepted', e.target.checked)
                           }
-                          className="w-6 h-6 accent-[var(--color-gold)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="w-6 h-6 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         />
                       </td>
 
@@ -424,7 +424,7 @@ export default function ReviewHome() {
 
         {/* 페이지네이션 */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--color-border)]">
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border">
             <span className="text-xs text-gray-500">
               {page} / {totalPages} 페이지
             </span>

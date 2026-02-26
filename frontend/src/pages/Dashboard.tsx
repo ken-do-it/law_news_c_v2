@@ -62,7 +62,7 @@ function CustomTooltip({
       {payload.map((p) => (
         <div key={p.name} className="flex items-center gap-2 py-0.5">
           <span
-            className="w-2 h-2 rounded-full flex-shrink-0"
+            className="w-2 h-2 rounded-full shrink-0"
             style={{ backgroundColor: p.color ?? p.fill }}
           />
           <span className="text-gray-600">{p.name}</span>
@@ -85,9 +85,9 @@ function KpiCard({
   accent: string;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] px-5 py-4 flex items-stretch gap-4 overflow-hidden">
+    <div className="bg-white rounded-xl border border-border px-5 py-4 flex items-stretch gap-4 overflow-hidden">
       <div
-        className="w-1 rounded-full flex-shrink-0 self-stretch"
+        className="w-1 rounded-full shrink-0 self-stretch"
         style={{ backgroundColor: accent }}
       />
       <div className="min-w-0">
@@ -208,11 +208,11 @@ export default function Dashboard() {
       {/* 차트 2열 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* 소송적합도 도넛 차트 */}
-        <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
+        <div className="bg-white rounded-xl border border-border p-5">
           <h3 className="text-sm font-semibold text-gray-800 mb-1">소송적합도 분포</h3>
           <p className="text-xs text-gray-400 mb-3">
             AI 판단 기준 전체 누적
-            <span className="ml-2 text-[var(--color-gold)]">클릭하면 심사현황으로 이동</span>
+            <span className="ml-2 text-gold">클릭하면 심사현황으로 이동</span>
           </p>
           <div className="relative">
             <ResponsiveContainer width="100%" height={260}>
@@ -267,11 +267,11 @@ export default function Dashboard() {
         </div>
 
         {/* 사건 분야별 누적 스택 바 */}
-        <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
+        <div className="bg-white rounded-xl border border-border p-5">
           <h3 className="text-sm font-semibold text-gray-800 mb-1">사건 분야별 분포</h3>
           <p className="text-xs text-gray-400 mb-3">
             상위 10개 분야
-            <span className="ml-2 text-[var(--color-gold)]">클릭하면 분석 목록으로 이동</span>
+            <span className="ml-2 text-gold">클릭하면 분석 목록으로 이동</span>
           </p>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart
@@ -312,7 +312,7 @@ export default function Dashboard() {
                   dataKey="count"
                   position="right"
                   style={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 600 }}
-                  formatter={(v: number) => `${v}건`}
+                  formatter={(v) => `${v}건`}
                 />
               </Bar>
             </BarChart>
@@ -321,7 +321,7 @@ export default function Dashboard() {
       </div>
 
       {/* 주간 추이 Area 차트 */}
-      <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
+      <div className="bg-white rounded-xl border border-border p-5">
         <h3 className="text-sm font-semibold text-gray-800 mb-1">주간 수집·분석 추이</h3>
         <p className="text-xs text-gray-400 mb-4">최근 7일</p>
         <ResponsiveContainer width="100%" height={220}>
@@ -371,7 +371,7 @@ export default function Dashboard() {
                 dataKey="total"
                 position="top"
                 style={{ fontSize: 10, fill: '#0F172A', fontWeight: 700 }}
-                formatter={(v: number) => v > 0 ? v : ''}
+                formatter={(v) => (Number(v) > 0 ? v : '')}
               />
             </Area>
             <Area
@@ -387,7 +387,7 @@ export default function Dashboard() {
                 dataKey="high"
                 position="top"
                 style={{ fontSize: 10, fill: '#E11D48', fontWeight: 600 }}
-                formatter={(v: number) => v > 0 ? v : ''}
+                formatter={(v) => (Number(v) > 0 ? v : '')}
               />
             </Area>
             <Area
@@ -404,7 +404,7 @@ export default function Dashboard() {
                 dataKey="medium"
                 position="top"
                 style={{ fontSize: 10, fill: '#D97706', fontWeight: 600 }}
-                formatter={(v: number) => v > 0 ? v : ''}
+                formatter={(v) => (Number(v) > 0 ? v : '')}
               />
             </Area>
           </AreaChart>
@@ -412,12 +412,12 @@ export default function Dashboard() {
       </div>
 
       {/* 최근 분석 결과 테이블 */}
-      <div className="bg-white rounded-xl border border-[var(--color-border)]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+      <div className="bg-white rounded-xl border border-border">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h3 className="text-sm font-semibold text-gray-800">최근 분석 결과</h3>
           <Link
             to="/analyses"
-            className="text-xs text-[var(--color-gold)] hover:underline font-medium"
+            className="text-xs text-gold hover:underline font-medium"
           >
             전체 보기 →
           </Link>

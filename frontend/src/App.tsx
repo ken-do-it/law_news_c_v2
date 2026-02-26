@@ -9,7 +9,7 @@ import Settings from './pages/Settings';
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-[var(--color-bg)]">
+      <div className="min-h-screen bg-bg">
         <TopNav />
         <Routes>
           <Route path="/" element={<ReviewHome />} />
