@@ -20,7 +20,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .export import export_analyses_to_excel  # 엑셀 내보내기 유틸리티
+from .export import export_analyses_to_excel, export_analyses_to_pdf  # 내보내기 유틸리티
 from .models import Analysis, CaseGroup
 from .serializers import (
     AnalysisDetailSerializer,   # 분석 상세 조회용 시리얼라이저
@@ -196,11 +196,20 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         return AnalysisListSerializer
 
     def partial_update(self, request, *args, **kwargs):
-        """심사 필드(review_completed, client_suitability, accepted) PATCH 처리"""
+        """심사 필드(review_completed, client_suitability, accepted) PATCH 처리.
+        같은 케이스 그룹의 모든 기사에 동일 심사 결과를 일괄 적용합니다.
+        """
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+
+        # 같은 케이스 그룹의 나머지 기사에도 동일 심사 결과 일괄 적용
+        if instance.case_group_id and serializer.validated_data:
+            Analysis.objects.filter(
+                case_group_id=instance.case_group_id
+            ).exclude(id=instance.id).update(**serializer.validated_data)
+
         # 저장 후 목록 시리얼라이저 형식으로 응답 반환
         return Response(AnalysisListSerializer(instance, context=self.get_serializer_context()).data)
 
@@ -374,6 +383,49 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         )
         # Content-Disposition 헤더 — 브라우저가 파일 다운로드로 처리하도록 설정
         response["Content-Disposition"] = 'attachment; filename="analyses_export.xlsx"'
+        return response
+
+    # ── PDF 리포트 API ──
+    @action(detail=False, methods=["get"])
+    def report(self, request):
+        """
+        주간/월간 PDF 리포트 다운로드.
+
+        URL: GET /api/analyses/report/?period=weekly
+             GET /api/analyses/report/?period=monthly
+
+        필터 조건:
+          - suitability: High 또는 Medium 등급
+          - review_completed: True (심사 완료 건만)
+
+        쿼리 파라미터:
+          - period: 'weekly'(기본) 또는 'monthly'
+        """
+        from datetime import date, timedelta
+
+        period = request.query_params.get("period", "weekly")
+
+        today = date.today()
+        if period == "monthly":
+            date_from = today.replace(day=1)
+            filename = today.strftime("report_%Y%m.pdf")
+        else:
+            date_from = today - timedelta(days=6)
+            filename = today.strftime("report_weekly_%Y%m%d.pdf")
+
+        queryset = (
+            Analysis.objects.select_related("article", "article__source", "case_group")
+            .filter(
+                suitability__in=["High", "Medium"],
+                review_completed=True,
+            )
+            .order_by("-analyzed_at")
+        )
+
+        buf = export_analyses_to_pdf(queryset, period=period)
+
+        response = HttpResponse(buf.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
 
