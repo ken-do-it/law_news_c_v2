@@ -20,7 +20,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .export import export_analyses_to_excel  # 엑셀 내보내기 유틸리티
+from .export import export_analyses_to_excel, export_case_groups_to_excel
 from .models import Analysis, CaseGroup
 from .serializers import (
     AnalysisDetailSerializer,
@@ -466,3 +466,19 @@ class CaseGroupViewSet(viewsets.ModelViewSet):
         )
 
         return Response(CaseGroupDetailSerializer(instance).data)
+
+    @action(detail=False, methods=["get"])
+    def export(self, request):
+        """
+        사건 그룹을 엑셀(.xlsx) 파일로 다운로드.
+        GET /api/case-groups/export/
+        필터: search, review_completed, accepted, ordering
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        buf = export_case_groups_to_excel(queryset)
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="case_groups_export.xlsx"'
+        return response

@@ -69,6 +69,25 @@ export async function downloadExcel(filters?: AnalysisFilters): Promise<void> {
   window.URL.revokeObjectURL(url);
 }
 
+export async function downloadExcelCase(filters?: CaseGroupFilters): Promise<void> {
+  const params = filters ? Object.fromEntries(
+    Object.entries(filters).filter(([k, v]) => k !== 'page' && v !== undefined && v !== ''),
+  ) : {};
+  const { data } = await api.get('/case-groups/export/', {
+    params,
+    responseType: 'blob',
+  });
+
+  const url = window.URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'case_groups_export.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export interface ReviewPayload {
   review_completed?: boolean;
   client_suitability?: 'High' | 'Medium' | 'Low' | null;

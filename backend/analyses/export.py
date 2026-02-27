@@ -96,3 +96,67 @@ def export_analyses_to_excel(queryset) -> io.BytesIO:
     wb.save(buf)
     buf.seek(0)
     return buf
+
+
+def export_case_groups_to_excel(queryset) -> io.BytesIO:
+    """사건 그룹(CaseGroup)을 .xlsx 파일로 내보내기 (사건 단위)"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "사건 목록"
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    headers = [
+        "No",
+        "케이스 ID",
+        "사건명",
+        "기사 수",
+        "심사 결과",
+        "심사 완료",
+        "수임 통과",
+    ]
+
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+
+    suit_fills = {
+        "High": PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid"),
+        "Medium": PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid"),
+        "Low": PatternFill(start_color="F3F4F6", end_color="F3F4F6", fill_type="solid"),
+    }
+
+    for idx, cg in enumerate(queryset, 1):
+        row = idx + 1
+        article_count = cg.analyses.filter(is_relevant=True).count() if hasattr(cg, "analyses") else 0
+        values = [
+            idx,
+            cg.case_id or "",
+            cg.name or "",
+            article_count,
+            cg.client_suitability or "",
+            "✓" if cg.review_completed else "—",
+            "✓" if cg.accepted else "—",
+        ]
+        for col, value in enumerate(values, 1):
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+        if cg.client_suitability:
+            suit_cell = ws.cell(row=row, column=5)
+            fill = suit_fills.get(cg.client_suitability)
+            if fill:
+                suit_cell.fill = fill
+
+    col_widths = [5, 16, 45, 10, 12, 12, 12]
+    for i, width in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf

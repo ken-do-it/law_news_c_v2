@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getAnalyses, getCaseGroups, downloadExcel, type AnalysisFilters, type CaseGroupFilters } from '../lib/api';
+import { getAnalyses, getCaseGroups, downloadExcel, downloadExcelCase, type AnalysisFilters, type CaseGroupFilters } from '../lib/api';
 import { useState } from 'react';
 import type { Analysis, CaseGroup, PaginatedResponse } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
@@ -374,10 +374,10 @@ export default function AnalysisList() {
           )}
         </div>
         <button
-          onClick={() => downloadExcel(filters)}
+          onClick={() => viewMode === 'case' ? downloadExcelCase(caseFilters) : downloadExcel(filters)}
           className="ml-auto bg-navy text-white text-sm px-4 py-1.5 rounded hover:opacity-90"
         >
-          📥 엑셀 다운로드
+          📥 엑셀 다운로드 {viewMode === 'case' ? '(사건)' : '(기사)'}
         </button>
       </div>
 

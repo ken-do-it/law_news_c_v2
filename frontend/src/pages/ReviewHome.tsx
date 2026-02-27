@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getCaseGroups, getStats, updateCaseGroupReview } from '../lib/api';
+import { getCaseGroups, getStats, updateCaseGroupReview, downloadExcelCase } from '../lib/api';
 import type { CaseGroupFilters, ReviewPayload } from '../lib/api';
 import type { CaseGroup, DashboardStats } from '../lib/types';
 import StatsCard from '../components/StatsCard';
@@ -285,7 +285,15 @@ export default function ReviewHome() {
               <span className="ml-2 text-xs font-normal text-gold">필터 적용 중</span>
             )}
           </h3>
-          <span className="text-xs text-gray-400">총 {total}건</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => downloadExcelCase(buildApiFilters(filters, 1))}
+              className="text-xs text-navy hover:underline font-medium"
+            >
+              📥 엑셀 다운로드
+            </button>
+            <span className="text-xs text-gray-400">총 {total}건</span>
+          </div>
         </div>
 
         {loading ? (
