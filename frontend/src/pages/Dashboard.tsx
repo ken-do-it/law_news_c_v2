@@ -4,8 +4,8 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, Legend, LabelList,
 } from 'recharts';
-import { getStats, getAnalyses, downloadReport } from '../lib/api';
-import type { DashboardStats, Analysis, SchedulerState } from '../lib/types';
+import { getStats, getAnalyses, downloadReport, getCaseGroups } from '../lib/api';
+import type { DashboardStats, Analysis, SchedulerState, CaseGroup } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
 import StageBadge from '../components/StageBadge';
 
@@ -136,6 +136,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<Analysis[]>([]);
   const [reportLoading, setReportLoading] = useState<'weekly' | 'monthly' | null>(null);
+  const [priorityCases, setPriorityCases] = useState<CaseGroup[]>([]);
 
   const handleReport = async (period: 'weekly' | 'monthly') => {
     setReportLoading(period);
@@ -149,8 +150,15 @@ export default function Dashboard() {
   useEffect(() => { document.title = 'AI 대시보드 | LawNGood'; }, []);
 
   const refresh = () => {
-    getStats().then(setStats);
-    getAnalyses({ ordering: '-analyzed_at' }).then((r) => setRecent(r.results.slice(0, 8)));
+    Promise.all([
+      getStats(),
+      getAnalyses({ ordering: '-analyzed_at' }),
+      getCaseGroups({ ordering: '-article_count', page: 1 }),
+    ]).then(([s, analyses, cases]) => {
+      setStats(s);
+      setRecent(analyses.results.slice(0, 8));
+      setPriorityCases(cases.results.slice(0, 5));
+    });
   };
 
   useEffect(() => {
@@ -208,13 +216,93 @@ export default function Dashboard() {
             {reportLoading === 'monthly' ? '생성 중...' : '📄 월간 리포트'}
           </button>
           <Link
-            to="/"
+            to="/review"
             className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-2 bg-white transition-colors"
           >
             심사 현황으로 →
           </Link>
         </div>
       </div>
+
+      {/* 우선 처리 케이스 TOP 5 */}
+      {priorityCases.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-300 uppercase tracking-widest mb-3">
+            우선 처리 케이스
+          </p>
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-gray-400 bg-gray-50">
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">케이스 ID</th>
+                  <th className="px-4 py-3 font-medium">사건명</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">기사 수</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">AI 적합도 요약</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">심사 상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {priorityCases.map((cg) => {
+                  const dist = cg.suitability_distribution || {};
+                  const high = dist.High ?? 0;
+                  const medium = dist.Medium ?? 0;
+                  const low = dist.Low ?? 0;
+                  return (
+                    <tr
+                      key={cg.id}
+                      className="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
+                      onClick={() => navigate(`/review?search=${encodeURIComponent(cg.case_id)}`)}
+                    >
+                      <td className="px-4 py-3 text-sm font-mono text-navy whitespace-nowrap">
+                        <button
+                          type="button"
+                          className="hover:underline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/analyses/case/${cg.case_id}`);
+                          }}
+                        >
+                          {cg.case_id}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 max-w-xs">
+                        <span className="line-clamp-1">{cg.name}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                        {cg.article_count.toLocaleString()}건
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {high || medium || low ? (
+                          <>
+                            <span className="text-red-500 font-semibold">High {high}</span>
+                            <span className="mx-1 text-gray-300">/</span>
+                            <span className="text-amber-600 font-semibold">Medium {medium}</span>
+                            <span className="mx-1 text-gray-300">/</span>
+                            <span className="text-gray-500">Low {low}</span>
+                          </>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {cg.review_completed ? (
+                          cg.accepted ? (
+                            <span className="text-green-600 font-semibold">통과</span>
+                          ) : (
+                            <span className="text-gray-700">심사완료</span>
+                          )
+                        ) : (
+                          <span className="text-orange-500 font-semibold">미심사</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* AI 분석 KPI */}
       <div>
@@ -311,7 +399,7 @@ export default function Dashboard() {
                   label={PieLabel as never}
                   labelLine={{ stroke: '#D1D5DB', strokeWidth: 1 }}
                   onClick={(data: { name?: string }) => {
-                    if (data?.name) navigate(`/?suitability=${data.name}`);
+                    if (data?.name) navigate(`/review?suitability=${data.name}`);
                   }}
                   style={{ cursor: 'pointer' }}
                 >
@@ -325,8 +413,10 @@ export default function Dashboard() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
                   formatter={(value) => (
-                    <span className="text-xs text-gray-600 cursor-pointer hover:underline"
-                      onClick={() => navigate(`/?suitability=${value}`)}>
+                    <span
+                      className="text-xs text-gray-600 cursor-pointer hover:underline"
+                      onClick={() => navigate(`/review?suitability=${value}`)}
+                    >
                       {value}
                     </span>
                   )}

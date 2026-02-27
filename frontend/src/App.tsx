@@ -15,8 +15,8 @@ export default function App() {
         <div className="min-h-screen bg-bg">
           <TopNav />
           <Routes>
-            <Route path="/" element={<ReviewHome />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/review" element={<ReviewHome />} />
             <Route path="/analyses" element={<AnalysisList />} />
             <Route path="/analyses/case/:case_id" element={<CaseDetail />} />
             <Route path="/analyses/:id" element={<AnalysisDetail />} />

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { getCaseGroupByCaseId, getAnalysis, updateCaseGroupReview, downloadExcel } from '../lib/api';
@@ -19,6 +20,7 @@ export default function CaseDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const articleId = searchParams.get('article');
   const articleRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const userCollapsedRef = useRef(false);
   const { toast } = useToast();
   const [caseGroup, setCaseGroup] = useState<CaseGroupDetail | null>(null);
   const [selectedAnalysis, setSelectedAnalysis] = useState<Analysis | null>(null);
@@ -31,6 +33,23 @@ export default function CaseDetail() {
 
   useEffect(() => {
     if (case_id) getCaseGroupByCaseId(case_id).then(setCaseGroup);
+  }, [case_id]);
+
+  // article 미선택 시 첫 기사 자동 선택 → 상세(상대방, 피해액 등) 바로 표시 (접기 후에는 재선택 안 함)
+  useEffect(() => {
+    if (!caseGroup || articleId || userCollapsedRef.current) return;
+    const first = caseGroup.analyses[0];
+    if (first) {
+      setSearchParams((p) => {
+        const next = new URLSearchParams(p);
+        next.set('article', String(first.id));
+        return next;
+      }, { replace: true });
+    }
+  }, [caseGroup, articleId, setSearchParams]);
+
+  useEffect(() => {
+    userCollapsedRef.current = false;
   }, [case_id]);
 
   useEffect(() => {
@@ -141,6 +160,7 @@ export default function CaseDetail() {
                     <div className="flex-1 min-w-0">
                       <Link
                         to={`/analyses/case/${case_id}?article=${a.id}`}
+                        onClick={() => { userCollapsedRef.current = false; }}
                         className="text-sm font-medium text-gray-800 hover:text-blue-600 line-clamp-1"
                       >
                         {a.article_title}
@@ -165,7 +185,7 @@ export default function CaseDetail() {
             </div>
           </div>
 
-          {/* 선택된 기사 상세 (AI 분석 요약, 판단 근거) */}
+          {/* 선택된 기사 상세 (요약 + 판단 근거) */}
           {selectedAnalysis && (
             <div className="bg-white rounded-xl border border-border p-6">
               <h2 className="text-sm font-semibold mb-3">📋 기사 상세 — {selectedAnalysis.article?.title?.slice(0, 40)}…</h2>
@@ -173,7 +193,9 @@ export default function CaseDetail() {
                 <SuitabilityBadge value={selectedAnalysis.suitability} />
                 <StageBadge value={selectedAnalysis.stage} />
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-4">{selectedAnalysis.summary}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-4">
+                {selectedAnalysis.summary}
+              </p>
               <div
                 className="rounded-lg p-4 border border-gray-100"
                 style={{ backgroundColor: reasonBg[selectedAnalysis.suitability] || '#fff' }}
@@ -184,6 +206,7 @@ export default function CaseDetail() {
               <button
                 type="button"
                 onClick={() => {
+                  userCollapsedRef.current = true;
                   const p = new URLSearchParams(searchParams);
                   p.delete('article');
                   setSearchParams(p);
@@ -196,12 +219,32 @@ export default function CaseDetail() {
           )}
         </div>
 
-        {/* 우측: 심사 카드 */}
+        {/* 우측: 기사 메타 + 심사 카드 */}
         <div className="lg:w-[380px]">
           <div
             className={`bg-white rounded-xl border border-border p-6 lg:sticky lg:top-6 space-y-4 ${reviewSaving ? 'opacity-60 pointer-events-none' : ''}`}
           >
-            <h2 className="text-sm font-semibold border-b pb-2">로앤굿 심사 (사건 단위)</h2>
+            {/* 선택된 기사 메타 정보 */}
+            <h2 className="text-sm font-semibold border-b pb-2">기사 상세 정보</h2>
+
+            {selectedAnalysis ? (
+              <div className="space-y-3">
+                <DetailItem icon="🎯" label="적합도" value={<SuitabilityBadge value={selectedAnalysis.suitability} />} />
+                <DetailItem icon="📁" label="사건 분야" value={selectedAnalysis.case_category || '-'} />
+                <DetailItem icon="🏢" label="상대방" value={selectedAnalysis.defendant || '-'} />
+                <DetailItem icon="💰" label="피해 규모" value={selectedAnalysis.damage_amount || '미상'} />
+                <DetailItem icon="👥" label="피해자 수" value={selectedAnalysis.victim_count || '미상'} />
+                <DetailItem icon="📊" label="진행 단계" value={<StageBadge value={selectedAnalysis.stage} />} />
+                <DetailItem icon="📝" label="단계 상세" value={selectedAnalysis.stage_detail || '-'} />
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">
+                왼쪽 기사 목록에서 하나를 선택하면 상세 정보가 여기 표시됩니다.
+              </p>
+            )}
+
+            {/* 사건 단위 로앤굿 심사 */}
+            <h2 className="text-sm font-semibold border-t pt-4 mt-2">로앤굿 심사 (사건 단위)</h2>
 
             <div className="space-y-1">
               <div className="text-xs text-gray-400">심사 결과</div>
@@ -249,6 +292,18 @@ export default function CaseDetail() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailItem({ icon, label, value }: { icon: string; label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-sm shrink-0">{icon}</span>
+      <div className="min-w-0">
+        <div className="text-xs text-gray-500">{label}</div>
+        <div className="text-sm font-medium mt-0.5">{value}</div>
       </div>
     </div>
   );
