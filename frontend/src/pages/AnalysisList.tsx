@@ -54,16 +54,27 @@ export default function AnalysisList() {
 
   useEffect(() => { document.title = '분석 목록 | LawNGood'; }, []);
 
-  const filters = useMemo<AnalysisFilters>(() => ({
-    suitability: searchParams.get('suitability') || undefined,
-    case_category: searchParams.get('case_category') || undefined,
-    stage: searchParams.get('stage') || undefined,
-    search: searchParams.get('search') || undefined,
-    ordering: searchParams.get('ordering') || '-analyzed_at',
-    page: Number(searchParams.get('page')) || 1,
-    include_irrelevant: searchParams.get('include_irrelevant') || undefined,
-    group_by_case: searchParams.get('group_by_case') !== 'false' ? 'true' : undefined,
-  }), [searchParams]);
+  const filters = useMemo<AnalysisFilters>(() => {
+    const search = searchParams.get('search') || undefined;
+    const groupByCaseParam = searchParams.get('group_by_case');
+    // case_id로 검색 시(CASE-YYYY-NNN) 같은 사건의 모든 기사 표시를 위해 묶기 해제
+    const isCaseIdSearch = search && /^CASE-\d{4}-\d{3}$/i.test(search.trim());
+    const group_by_case = isCaseIdSearch
+      ? 'false'
+      : groupByCaseParam !== 'false'
+        ? 'true'
+        : undefined;
+    return {
+      suitability: searchParams.get('suitability') || undefined,
+      case_category: searchParams.get('case_category') || undefined,
+      stage: searchParams.get('stage') || undefined,
+      search,
+      ordering: searchParams.get('ordering') || '-analyzed_at',
+      page: Number(searchParams.get('page')) || 1,
+      include_irrelevant: searchParams.get('include_irrelevant') || undefined,
+      group_by_case,
+    };
+  }, [searchParams]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

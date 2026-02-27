@@ -26,7 +26,8 @@ export default function AnalysisDetail() {
 
   useEffect(() => {
     if (analysis) {
-      document.title = `${analysis.article_title.slice(0, 40)} | LawNGood`;
+      const title = analysis.article?.title ?? analysis.article_title ?? '';
+      document.title = `${title.slice(0, 40)} | LawNGood`;
     }
   }, [analysis]);
 

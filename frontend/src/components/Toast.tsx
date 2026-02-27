@@ -18,7 +18,7 @@ export function useToast() {
 
 function ToastItem({ item, onDone }: { item: ToastItem; onDone: () => void }) {
   useEffect(() => {
-    const t = setTimeout(onDone, 3200);
+    const t = setTimeout(onDone, 1200);
     return () => clearTimeout(t);
   }, [onDone]);
 
