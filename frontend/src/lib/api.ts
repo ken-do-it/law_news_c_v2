@@ -1,7 +1,15 @@
 import axios from 'axios';
-import type { Analysis, DashboardStats, Keyword, PaginatedResponse } from './types';
+import type { Analysis, CaseGroup, CaseGroupDetail, DashboardStats, Keyword, PaginatedResponse } from './types';
 
 const api = axios.create({ baseURL: '/api' });
+
+export interface CaseGroupFilters {
+  search?: string;
+  ordering?: string;
+  page?: number;
+  review_completed?: boolean;
+  accepted?: boolean;
+}
 
 export interface AnalysisFilters {
   suitability?: string;
@@ -12,6 +20,7 @@ export interface AnalysisFilters {
   page?: number;
   include_irrelevant?: string;
   group_by_case?: string;
+  standalone?: boolean;
   review_completed?: boolean;
   accepted?: boolean;
   client_suitability?: string;
@@ -68,6 +77,29 @@ export interface ReviewPayload {
 
 export async function updateReview(id: number, payload: ReviewPayload): Promise<Analysis> {
   const { data } = await api.patch<Analysis>(`/analyses/${id}/`, payload);
+  return data;
+}
+
+export async function getCaseGroups(
+  filters?: CaseGroupFilters,
+): Promise<PaginatedResponse<CaseGroup>> {
+  const params = filters ? Object.fromEntries(
+    Object.entries(filters).filter(([, v]) => v !== undefined && v !== ''),
+  ) : {};
+  const { data } = await api.get<PaginatedResponse<CaseGroup>>('/case-groups/', { params });
+  return data;
+}
+
+export async function getCaseGroupByCaseId(caseId: string): Promise<CaseGroupDetail> {
+  const { data } = await api.get<CaseGroupDetail>(`/case-groups/by_case_id/${encodeURIComponent(caseId)}/`);
+  return data;
+}
+
+export async function updateCaseGroupReview(
+  id: number,
+  payload: ReviewPayload,
+): Promise<CaseGroupDetail> {
+  const { data } = await api.patch<CaseGroupDetail>(`/case-groups/${id}/`, payload);
   return data;
 }
 

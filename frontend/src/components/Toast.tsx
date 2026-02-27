@@ -60,7 +60,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 items-end">
+      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-2 items-end">
         {toasts.map((t) => (
           <ToastItem key={t.id} item={t} onDone={() => remove(t.id)} />
         ))}

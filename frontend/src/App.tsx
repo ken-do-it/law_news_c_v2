@@ -5,6 +5,7 @@ import ReviewHome from './pages/ReviewHome';
 import Dashboard from './pages/Dashboard';
 import AnalysisList from './pages/AnalysisList';
 import AnalysisDetail from './pages/AnalysisDetail';
+import CaseDetail from './pages/CaseDetail';
 import Settings from './pages/Settings';
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
             <Route path="/" element={<ReviewHome />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/analyses" element={<AnalysisList />} />
+            <Route path="/analyses/case/:case_id" element={<CaseDetail />} />
             <Route path="/analyses/:id" element={<AnalysisDetail />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

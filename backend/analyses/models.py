@@ -6,6 +6,12 @@ from django.db import models
 class CaseGroup(models.Model):
     """유사 사건 자동 그룹핑 — LLM이 분석 시 사건명을 기준으로 자동 배정"""
 
+    SUITABILITY_CHOICES = [
+        ("High", "High"),
+        ("Medium", "Medium"),
+        ("Low", "Low"),
+    ]
+
     case_id = models.CharField(
         "케이스 ID",
         max_length=30,
@@ -16,6 +22,28 @@ class CaseGroup(models.Model):
     description = models.TextField("사건 설명", blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # 로앤굿 심사 필드 (사건 단위)
+    review_completed = models.BooleanField(
+        "심사 완료",
+        default=False,
+        db_index=True,
+        help_text="로앤굿이 해당 사건을 검토 완료한 경우 True",
+    )
+    client_suitability = models.CharField(
+        "로앤굿 심사 결과",
+        max_length=10,
+        choices=SUITABILITY_CHOICES,
+        null=True,
+        blank=True,
+        help_text="로앤굿이 직접 판단한 소송 적합도",
+    )
+    accepted = models.BooleanField(
+        "통과 여부",
+        default=False,
+        db_index=True,
+        help_text="수임 대상으로 채택 여부 — 심사 완료 이후에만 True 가능",
+    )
 
     class Meta:
         db_table = "case_groups"

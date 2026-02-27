@@ -78,6 +78,14 @@ export interface CaseGroup {
   description: string;
   article_count: number;
   created_at: string;
+  review_completed: boolean;
+  client_suitability: 'High' | 'Medium' | 'Low' | null;
+  accepted: boolean;
+}
+
+export interface CaseGroupDetail extends CaseGroup {
+  analyses: RelatedArticle[];
+  suitability_distribution: Record<string, number>;
 }
 
 export interface SchedulerState {
@@ -99,5 +107,9 @@ export interface DashboardStats {
   total_reviewed: number;
   total_accepted: number;
   acceptance_rate: number;
+  total_cases: number;
+  total_reviewed_cases: number;
+  total_accepted_cases: number;
+  acceptance_rate_cases: number;
   scheduler_state: SchedulerState | null;
 }

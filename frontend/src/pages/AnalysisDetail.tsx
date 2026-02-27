@@ -86,9 +86,19 @@ export default function AnalysisDetail() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <Link to="/analyses" className="text-sm text-blue-600 hover:underline mb-4 inline-block">
-        ← 목록으로 돌아가기
-      </Link>
+      <div className="flex items-center gap-3 mb-4">
+        <Link to="/analyses" className="text-sm text-blue-600 hover:underline">
+          ← 목록으로 돌아가기
+        </Link>
+        {analysis.case_group && (
+          <Link
+            to={`/analyses/case/${analysis.case_group.case_id}`}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            이 사건 전체 보기 ({analysis.case_group.case_id})
+          </Link>
+        )}
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* 왼쪽: 기사 + AI 분석 */}

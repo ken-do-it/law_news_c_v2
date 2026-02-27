@@ -6,11 +6,70 @@ from .models import Analysis, CaseGroup
 
 
 class CaseGroupSerializer(serializers.ModelSerializer):
-    article_count = serializers.IntegerField(source="analyses.count", read_only=True)
+    article_count = serializers.SerializerMethodField()
 
     class Meta:
         model = CaseGroup
-        fields = ["id", "case_id", "name", "description", "article_count", "created_at"]
+        fields = [
+            "id", "case_id", "name", "description", "article_count", "created_at",
+            "review_completed", "client_suitability", "accepted",
+        ]
+
+    def get_article_count(self, obj):
+        if hasattr(obj, "article_count"):
+            return obj.article_count
+        return obj.analyses.filter(is_relevant=True).count()
+
+
+class CaseGroupDetailSerializer(serializers.ModelSerializer):
+    """사건 그룹 상세 — analyses 목록 포함"""
+    article_count = serializers.SerializerMethodField()
+    analyses = serializers.SerializerMethodField()
+    suitability_distribution = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CaseGroup
+        fields = [
+            "id", "case_id", "name", "description", "article_count", "created_at",
+            "review_completed", "client_suitability", "accepted",
+            "analyses", "suitability_distribution",
+        ]
+
+    def get_article_count(self, obj):
+        return obj.analyses.filter(is_relevant=True).count()
+
+    def get_analyses(self, obj):
+        analyses = obj.analyses.filter(is_relevant=True).select_related(
+            "article", "article__source"
+        ).order_by("-article__published_at")
+        return RelatedArticleSerializer(analyses, many=True).data
+
+    def get_suitability_distribution(self, obj):
+        from django.db.models import Count
+        dist = obj.analyses.filter(is_relevant=True).values("suitability").annotate(
+            count=Count("id")
+        )
+        return {d["suitability"]: d["count"] for d in dist}
+
+
+class CaseGroupReviewSerializer(serializers.ModelSerializer):
+    """사건 그룹 심사 필드 PATCH 전용"""
+
+    class Meta:
+        model = CaseGroup
+        fields = ["review_completed", "client_suitability", "accepted"]
+
+    def validate(self, attrs):
+        accepted = attrs.get("accepted", self.instance.accepted if self.instance else False)
+        review_completed = attrs.get(
+            "review_completed",
+            self.instance.review_completed if self.instance else False,
+        )
+        if accepted and not review_completed:
+            raise serializers.ValidationError(
+                {"accepted": "심사 완료 이후에만 통과 처리할 수 있습니다."}
+            )
+        return attrs
 
 
 class AnalysisListSerializer(serializers.ModelSerializer):

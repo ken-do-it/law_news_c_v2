@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getAnalyses, getStats, updateReview } from '../lib/api';
-import type { AnalysisFilters, ReviewPayload } from '../lib/api';
-import type { Analysis, DashboardStats } from '../lib/types';
+import { getCaseGroups, getStats, updateCaseGroupReview } from '../lib/api';
+import type { CaseGroupFilters, ReviewPayload } from '../lib/api';
+import type { CaseGroup, DashboardStats } from '../lib/types';
 import StatsCard from '../components/StatsCard';
 import SuitabilityBadge from '../components/SuitabilityBadge';
 import TableSkeleton from '../components/TableSkeleton';
@@ -50,41 +50,6 @@ function ClientSuitabilityButtons({
   );
 }
 
-// ── AI 적합도 다중 선택 필터 ──
-function SuitabilityMultiFilter({
-  value,
-  onToggle,
-}: {
-  value: string[];
-  onToggle: (opt: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-500 whitespace-nowrap">AI 적합도</span>
-      <div className="flex gap-1">
-        {SUITABILITY_OPTIONS.map((opt) => {
-          const isActive = value.includes(opt);
-          const c = SUIT_CONFIG[opt];
-          return (
-            <button
-              key={opt}
-              onClick={() => onToggle(opt)}
-              className="px-3 py-1 text-xs font-semibold rounded transition-all"
-              style={
-                isActive
-                  ? { backgroundColor: c.solid, color: '#fff' }
-                  : { backgroundColor: 'white', color: '#9CA3AF', border: '1px solid #E5E7EB' }
-              }
-            >
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ── 단일 선택 토글 필터 (심사완료, 통과여부) ──
 type BoolFilter = 'all' | 'true' | 'false';
 
@@ -122,14 +87,12 @@ function FilterToggle<T extends string>({
 }
 
 interface Filters {
-  suitability: string[];   // 다중 선택 (빈 배열 = 전체)
   review_completed: BoolFilter;
   accepted: BoolFilter;
   unreviewed_first: boolean;
 }
 
 const DEFAULT_FILTERS: Filters = {
-  suitability: [],
   review_completed: 'all',
   accepted: 'all',
   unreviewed_first: false,
@@ -139,31 +102,25 @@ export default function ReviewHome() {
   const [searchParams] = useSearchParams();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [analyses, setAnalyses] = useState<Analysis[]>([]);
+  const [cases, setCases] = useState<CaseGroup[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Set<number>>(new Set());
 
-  // URL 파라미터로 초기 필터 설정 (대시보드 파이 차트 클릭 연동)
-  const [filters, setFilters] = useState<Filters>(() => {
-    const suitabilityParam = searchParams.get('suitability');
-    return {
-      suitability: suitabilityParam ? [suitabilityParam] : [],
-      review_completed: 'all',
-      accepted: 'all',
-      unreviewed_first: false,
-    };
-  });
+  const [filters, setFilters] = useState<Filters>(() => ({
+    review_completed: 'all',
+    accepted: 'all',
+    unreviewed_first: false,
+  }));
 
   const PAGE_SIZE = 20;
 
-  const buildApiFilters = useCallback((f: Filters, p: number): AnalysisFilters => {
-    const params: AnalysisFilters = {
-      ordering: f.unreviewed_first ? 'review_completed,-analyzed_at' : '-analyzed_at',
+  const buildApiFilters = useCallback((f: Filters, p: number): CaseGroupFilters => {
+    const params: CaseGroupFilters = {
+      ordering: f.unreviewed_first ? 'review_completed,-created_at' : '-created_at',
       page: p,
     };
-    if (f.suitability.length > 0) params.suitability = f.suitability.join(',');
     if (f.review_completed !== 'all') params.review_completed = f.review_completed === 'true';
     if (f.accepted !== 'all') params.accepted = f.accepted === 'true';
     return params;
@@ -174,10 +131,10 @@ export default function ReviewHome() {
     try {
       const [statsData, listData] = await Promise.all([
         getStats(),
-        getAnalyses(buildApiFilters(f, p)),
+        getCaseGroups(buildApiFilters(f, p)),
       ]);
       setStats(statsData);
-      setAnalyses(listData.results);
+      setCases(listData.results);
       setTotal(listData.count);
     } finally {
       setLoading(false);
@@ -188,17 +145,7 @@ export default function ReviewHome() {
     loadData(page, filters);
   }, [page, filters, loadData]);
 
-  const handleSuitabilityToggle = (opt: string) => {
-    setPage(1);
-    setFilters((prev) => ({
-      ...prev,
-      suitability: prev.suitability.includes(opt)
-        ? prev.suitability.filter((v) => v !== opt)
-        : [...prev.suitability, opt],
-    }));
-  };
-
-  const handleFilterChange = <K extends keyof Omit<Filters, 'suitability'>>(
+  const handleFilterChange = <K extends keyof Filters>(
     key: K,
     value: Filters[K],
   ) => {
@@ -214,7 +161,6 @@ export default function ReviewHome() {
   useEffect(() => { document.title = '심사 현황 | LawNGood'; }, []);
 
   const isFiltered =
-    filters.suitability.length > 0 ||
     filters.review_completed !== 'all' ||
     filters.accepted !== 'all';
 
@@ -228,29 +174,26 @@ export default function ReviewHome() {
     field: 'review_completed' | 'client_suitability' | 'accepted',
     value: boolean | 'High' | 'Medium' | 'Low' | null,
   ) => {
-    // 심사완료 체크 시 client_suitability 자동 설정 (미선택 상태일 때만)
     const extraPayload: ReviewPayload = {};
     if (field === 'review_completed' && value === true) {
-      const analysis = analyses.find((a) => a.id === id);
-      if (analysis && !analysis.client_suitability) {
-        extraPayload.client_suitability = analysis.suitability;
+      const c = cases.find((x) => x.id === id);
+      if (c && !c.client_suitability) {
+        extraPayload.client_suitability = 'Medium';
       }
     }
 
-    // 낙관적 업데이트
-    setAnalyses((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, [field]: value, ...extraPayload } : a)),
+    setCases((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, [field]: value, ...extraPayload } : c)),
     );
-
     setSaving((prev) => new Set(prev).add(id));
     try {
-      const updated = await updateReview(id, { [field]: value, ...extraPayload });
-      setAnalyses((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+      const updated = await updateCaseGroupReview(id, { [field]: value, ...extraPayload });
+      setCases((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
       const newStats = await getStats();
       setStats(newStats);
     } catch {
-      const listData = await getAnalyses(buildApiFilters(filters, page));
-      setAnalyses(listData.results);
+      const listData = await getCaseGroups(buildApiFilters(filters, page));
+      setCases(listData.results);
     } finally {
       setSaving((prev) => {
         const next = new Set(prev);
@@ -272,15 +215,16 @@ export default function ReviewHome() {
         </p>
       </div>
 
-      {/* 요약 카드 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard icon="📋" label="전체 케이스" value={stats?.total_analyzed ?? '-'} sub="건" />
-        <StatsCard icon="✅" label="심사 완료" value={stats?.total_reviewed ?? '-'} sub="건" />
-        <StatsCard icon="🎯" label="수임 통과" value={stats?.total_accepted ?? '-'} sub="건" />
+      {/* 요약 카드 — 컴팩트 (정보 전달 중심) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 max-w-xl">
+        <StatsCard compact icon="📋" label="전체 케이스" value={stats?.total_cases ?? '-'} sub="건" />
+        <StatsCard compact icon="✅" label="심사 완료" value={stats?.total_reviewed_cases ?? '-'} sub="건" />
+        <StatsCard compact icon="🎯" label="수임 통과" value={stats?.total_accepted_cases ?? '-'} sub="건" />
         <StatsCard
+          compact
           icon="📊"
           label="통과율"
-          value={stats ? `${stats.acceptance_rate}%` : '-'}
+          value={stats ? `${stats.acceptance_rate_cases}%` : '-'}
           sub="심사 완료 대비"
         />
       </div>
@@ -289,11 +233,6 @@ export default function ReviewHome() {
       <div className="bg-white rounded-xl border border-border px-5 py-4">
         <div className="flex flex-wrap items-center gap-4">
           {/* AI 적합도 — 다중 선택 */}
-          <SuitabilityMultiFilter
-            value={filters.suitability}
-            onToggle={handleSuitabilityToggle}
-          />
-
           <FilterToggle
             label="심사완료"
             value={filters.review_completed}
@@ -319,7 +258,7 @@ export default function ReviewHome() {
             onClick={toggleUnreviewedFirst}
             className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
               filters.unreviewed_first
-                ? 'bg-[var(--color-navy)] text-white border-[var(--color-navy)] font-semibold'
+                ? 'bg-navy text-white border-navy font-semibold'
                 : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
             }`}
           >
@@ -360,105 +299,76 @@ export default function ReviewHome() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-gray-500 bg-gray-50">
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">AI 적합도</th>
-                  <th className="px-4 py-3 font-medium">기사 제목</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">분야</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">케이스 ID</th>
+                  <th className="px-4 py-3 font-medium">사건명</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">기사 수</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap">로앤굿 심사결과</th>
                   <th className="px-4 py-3 font-medium text-center whitespace-nowrap">심사완료</th>
                   <th className="px-4 py-3 font-medium text-center whitespace-nowrap">통과여부</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">케이스 ID</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">날짜</th>
                 </tr>
               </thead>
               <tbody>
-                {analyses.map((a) => {
-                  const isSaving = saving.has(a.id);
+                {cases.map((c) => {
+                  const isSaving = saving.has(c.id);
                   return (
                     <tr
-                      key={a.id}
+                      key={c.id}
                       className={`border-b last:border-0 transition-colors ${isSaving ? 'opacity-60' : 'hover:bg-gray-50'}`}
                     >
-                      {/* AI 적합도 */}
                       <td className="px-4 py-3">
-                        <SuitabilityBadge value={a.suitability} />
-                      </td>
-
-                      {/* 기사 제목 */}
-                      <td className="px-4 py-3 max-w-xs">
                         <Link
-                          to={`/analyses/${a.id}`}
-                          className="hover:text-blue-600 line-clamp-2 leading-snug"
+                          to={`/analyses/case/${c.case_id}`}
+                          className="text-blue-600 hover:underline font-mono"
                         >
-                          {a.article_title}
+                          {c.case_id}
                         </Link>
                       </td>
-
-                      {/* 분야 */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        {a.case_category}
+                      <td className="px-4 py-3 max-w-xs">
+                        <Link
+                          to={`/analyses/case/${c.case_id}`}
+                          className="hover:text-blue-600 line-clamp-2 leading-snug"
+                        >
+                          {c.name}
+                        </Link>
                       </td>
-
-                      {/* 로앤굿 심사결과 버튼 */}
+                      <td className="px-4 py-3 text-gray-600">{c.article_count}</td>
                       <td className="px-4 py-3">
                         <ClientSuitabilityButtons
-                          value={a.client_suitability}
-                          onChange={(v) => handleReviewChange(a.id, 'client_suitability', v)}
+                          value={c.client_suitability}
+                          onChange={(v) => handleReviewChange(c.id, 'client_suitability', v)}
                           disabled={isSaving}
                         />
                       </td>
-
-                      {/* 심사완료 체크박스 — 2배 크기 */}
                       <td className="px-4 py-3 text-center">
                         <input
                           type="checkbox"
-                          checked={a.review_completed}
+                          checked={c.review_completed}
                           disabled={isSaving}
                           onChange={(e) =>
-                            handleReviewChange(a.id, 'review_completed', e.target.checked)
+                            handleReviewChange(c.id, 'review_completed', e.target.checked)
                           }
                           className="w-6 h-6 accent-navy cursor-pointer disabled:cursor-not-allowed"
                         />
                       </td>
-
-                      {/* 통과여부 체크박스 — 2배 크기 */}
                       <td className="px-4 py-3 text-center">
                         <input
                           type="checkbox"
-                          checked={a.accepted}
-                          disabled={isSaving || !a.review_completed}
-                          title={!a.review_completed ? '심사 완료 후 체크 가능합니다' : undefined}
+                          checked={c.accepted}
+                          disabled={isSaving || !c.review_completed}
+                          title={!c.review_completed ? '심사 완료 후 체크 가능합니다' : undefined}
                           onChange={(e) =>
-                            handleReviewChange(a.id, 'accepted', e.target.checked)
+                            handleReviewChange(c.id, 'accepted', e.target.checked)
                           }
                           className="w-6 h-6 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         />
                       </td>
-
-                      {/* 케이스 ID */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        {a.case_id ? (
-                          <Link
-                            to={`/analyses?search=${encodeURIComponent(a.case_id)}`}
-                            className="text-blue-600 hover:underline"
-                          >
-                            {a.case_id}
-                          </Link>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-
-                      {/* 날짜 */}
-                      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                        {a.published_at?.slice(0, 10)}
-                      </td>
                     </tr>
                   );
                 })}
-                {analyses.length === 0 && (
+                {cases.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-gray-400">
-                      분석 데이터가 없습니다
+                    <td colSpan={6} className="py-12 text-center text-gray-400">
+                      사건 데이터가 없습니다
                     </td>
                   </tr>
                 )}

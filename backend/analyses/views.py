@@ -23,10 +23,12 @@ from rest_framework.response import Response
 from .export import export_analyses_to_excel  # 엑셀 내보내기 유틸리티
 from .models import Analysis, CaseGroup
 from .serializers import (
-    AnalysisDetailSerializer,   # 분석 상세 조회용 시리얼라이저
-    AnalysisListSerializer,     # 분석 목록 조회용 시리얼라이저
-    AnalysisReviewSerializer,   # 심사 필드 PATCH용 시리얼라이저
-    CaseGroupSerializer,        # 사건 그룹 시리얼라이저
+    AnalysisDetailSerializer,
+    AnalysisListSerializer,
+    AnalysisReviewSerializer,
+    CaseGroupDetailSerializer,
+    CaseGroupReviewSerializer,
+    CaseGroupSerializer,
 )
 
 
@@ -69,6 +71,9 @@ class AnalysisFilter(filters.FilterSet):
     # 사건 그룹 ID 필터 — 특정 사건 그룹에 속한 분석 결과만 조회
     case_group = filters.NumberFilter(field_name="case_group__id")
 
+    # 단독 기사만 (case_group이 없는 기사)
+    standalone = filters.BooleanFilter(field_name="case_group", lookup_expr="isnull")
+
     # 법적 분쟁 관련 여부 필터 — 기본값 True (무관 기사 숨김)
     is_relevant = filters.BooleanFilter(field_name="is_relevant")
 
@@ -84,7 +89,7 @@ class AnalysisFilter(filters.FilterSet):
     class Meta:
         model = Analysis
         fields = [
-            "suitability", "case_category", "stage", "case_group",
+            "suitability", "case_category", "stage", "case_group", "standalone",
             "is_relevant", "review_completed", "accepted", "client_suitability",
         ]
 
@@ -317,10 +322,20 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
                 "medium": medium,
             })
 
-        # ── 8. 심사 현황 통계 ──
+        # ── 8. 심사 현황 통계 (기사 단위 — 하위 호환) ──
         total_reviewed = Analysis.objects.filter(review_completed=True).count()
         total_accepted = Analysis.objects.filter(accepted=True).count()
         acceptance_rate = round(total_accepted / total_reviewed * 100) if total_reviewed > 0 else 0
+
+        # ── 8-1. 사건(CaseGroup) 단위 심사 통계 ──
+        total_cases = CaseGroup.objects.count()
+        total_reviewed_cases = CaseGroup.objects.filter(review_completed=True).count()
+        total_accepted_cases = CaseGroup.objects.filter(accepted=True).count()
+        acceptance_rate_cases = (
+            round(total_accepted_cases / total_reviewed_cases * 100)
+            if total_reviewed_cases > 0
+            else 0
+        )
 
         # ── 9. 스케줄러 상태 (다음 수집 시간 등) ──
         try:
@@ -340,6 +355,10 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             "suitability_distribution": suitability_distribution,
             "category_distribution": category_distribution,
             "weekly_trend": weekly_trend,
+            "total_cases": total_cases,
+            "total_reviewed_cases": total_reviewed_cases,
+            "total_accepted_cases": total_accepted_cases,
+            "acceptance_rate_cases": acceptance_rate_cases,
             "total_reviewed": total_reviewed,
             "total_accepted": total_accepted,
             "acceptance_rate": acceptance_rate,
@@ -378,32 +397,72 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # ──────────────────────────────────────────────
-# 사건 그룹 ViewSet (읽기 전용)
+# 사건 그룹 필터
 # ──────────────────────────────────────────────
-class CaseGroupViewSet(viewsets.ReadOnlyModelViewSet):
+class CaseGroupFilter(filters.FilterSet):
+    review_completed = filters.BooleanFilter(field_name="review_completed")
+    accepted = filters.BooleanFilter(field_name="accepted")
+
+    class Meta:
+        model = CaseGroup
+        fields = ["review_completed", "accepted"]
+
+
+# ──────────────────────────────────────────────
+# 사건 그룹 ViewSet
+# ──────────────────────────────────────────────
+class CaseGroupViewSet(viewsets.ModelViewSet):
     """
     사건 그룹(CaseGroup) API 엔드포인트.
 
-    동일한 사건에 대한 여러 기사를 하나의 그룹으로 묶어 관리합니다.
-    예: "쿠팡 개인정보 유출" 관련 기사 34건 → CASE-2026-001
-
     엔드포인트:
-      GET /api/case-groups/       → 사건 그룹 목록 (검색, 정렬)
-      GET /api/case-groups/{id}/  → 사건 그룹 상세
-
-    QuerySet:
-      prefetch_related("analyses")로 관련 분석 결과를 미리 로드하여
-      N+1 쿼리 문제를 방지합니다.
+      GET    /api/case-groups/                    → 목록 (검색, 정렬)
+      GET    /api/case-groups/{id}/              → 상세 (analyses 포함)
+      GET    /api/case-groups/by_case_id/{case_id}/ → case_id로 상세 조회
+      PATCH  /api/case-groups/{id}/              → 심사 필드 업데이트
     """
 
-    # prefetch_related: 역참조 관계(1:N)에서 추가 쿼리를 최소화
     queryset = CaseGroup.objects.prefetch_related("analyses").all()
-
-    serializer_class = CaseGroupSerializer
-
-    # 검색 필드 — ?search= 파라미터로 사건 ID 또는 사건명 검색
-    # 예: ?search=쿠팡  또는  ?search=CASE-2026-001
+    filterset_class = CaseGroupFilter
     search_fields = ["case_id", "name"]
-
-    # 기본 정렬 — 생성일 기준 최신순
     ordering = ["-created_at"]
+    ordering_fields = ["created_at", "case_id", "review_completed"]
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve" or self.action == "by_case_id":
+            return CaseGroupDetailSerializer
+        if self.action == "partial_update":
+            return CaseGroupReviewSerializer
+        return CaseGroupSerializer
+
+    def get_queryset(self):
+        return super().get_queryset()
+
+    @action(detail=False, url_path="by_case_id/(?P<case_id>[^/.]+)")
+    def by_case_id(self, request, case_id=None):
+        """case_id로 사건 그룹 상세 조회 (GET /api/case-groups/by_case_id/CASE-2026-001/)"""
+        obj = CaseGroup.objects.filter(case_id=case_id).prefetch_related(
+            "analyses", "analyses__article", "analyses__article__source"
+        ).first()
+        if not obj:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("해당 case_id를 찾을 수 없습니다.")
+        serializer = CaseGroupDetailSerializer(obj)
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        """심사 필드 PATCH — CaseGroup 업데이트 후 동일 case_group의 Analysis에도 동기화"""
+        instance = self.get_object()
+        serializer = CaseGroupReviewSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # 동일 case_group의 모든 Analysis에 심사 값 동기화 (하위 호환)
+        Analysis.objects.filter(case_group=instance).update(
+            review_completed=instance.review_completed,
+            client_suitability=instance.client_suitability,
+            accepted=instance.accepted,
+        )
+
+        return Response(CaseGroupDetailSerializer(instance).data)

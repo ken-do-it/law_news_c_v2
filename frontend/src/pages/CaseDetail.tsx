@@ -1,0 +1,199 @@
+import { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { getCaseGroupByCaseId, updateCaseGroupReview, downloadExcel } from '../lib/api';
+import type { CaseGroupDetail, ReviewPayload } from '../lib/api';
+import SuitabilityBadge from '../components/SuitabilityBadge';
+import ClientSuitabilityButtons from '../components/ClientSuitabilityButtons';
+import { useToast } from '../components/Toast';
+
+export default function CaseDetail() {
+  const { case_id } = useParams<{ case_id: string }>();
+  const { toast } = useToast();
+  const [caseGroup, setCaseGroup] = useState<CaseGroupDetail | null>(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
+
+  useEffect(() => {
+    if (case_id) getCaseGroupByCaseId(case_id).then(setCaseGroup);
+  }, [case_id]);
+
+  useEffect(() => {
+    if (caseGroup) {
+      document.title = `${caseGroup.case_id} — ${caseGroup.name} | LawNGood`;
+    }
+  }, [caseGroup]);
+
+  const handleReviewChange = async (
+    field: 'review_completed' | 'client_suitability' | 'accepted',
+    value: boolean | 'High' | 'Medium' | 'Low' | null,
+  ) => {
+    if (!caseGroup) return;
+    const extraPayload: Partial<ReviewPayload> = {};
+    if (field === 'review_completed' && value === true && !caseGroup.client_suitability) {
+      const dist = caseGroup.suitability_distribution;
+      const suit = dist?.High ? 'High' : dist?.Medium ? 'Medium' : 'Low';
+      extraPayload.client_suitability = suit;
+    }
+    setCaseGroup((prev) => prev ? { ...prev, [field]: value, ...extraPayload } : prev);
+    setReviewSaving(true);
+    try {
+      const updated = await updateCaseGroupReview(caseGroup.id, { [field]: value, ...extraPayload });
+      setCaseGroup(updated);
+      toast(field === 'accepted' && value ? '수임 통과로 설정되었습니다.' : '심사 상태가 저장되었습니다.');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { accepted?: string[] } } })
+        ?.response?.data?.accepted?.[0];
+      toast(msg ?? '저장에 실패했습니다.', 'error');
+      getCaseGroupByCaseId(case_id!).then(setCaseGroup);
+    } finally {
+      setReviewSaving(false);
+    }
+  };
+
+  if (!caseGroup) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="text-gray-200 text-5xl mb-3 animate-pulse">◌</div>
+          <div className="text-gray-400 text-sm">로딩 중...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const dist = caseGroup.suitability_distribution || {};
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      <Link to="/analyses" className="text-sm text-blue-600 hover:underline mb-4 inline-block">
+        ← 목록으로 돌아가기
+      </Link>
+
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-1 space-y-4">
+          {/* 사건 헤더 */}
+          <div className="bg-white rounded-xl border border-border p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm font-mono text-navy font-semibold">{caseGroup.case_id}</span>
+              <span className="text-xs text-gray-500">· 기사 {caseGroup.article_count}건</span>
+            </div>
+            <h1 className="text-xl font-bold mb-2">{caseGroup.name}</h1>
+            {caseGroup.description && (
+              <p className="text-sm text-gray-600">{caseGroup.description}</p>
+            )}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {dist.High != null && (
+                <span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded">
+                  High {dist.High}
+                </span>
+              )}
+              {dist.Medium != null && (
+                <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">
+                  Medium {dist.Medium}
+                </span>
+              )}
+              {dist.Low != null && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                  Low {dist.Low}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* 기사 목록 */}
+          <div className="bg-white rounded-xl border border-border p-6">
+            <h2 className="text-sm font-semibold mb-4">
+              📰 소속 기사 ({caseGroup.analyses.length}건)
+            </h2>
+            <div className="space-y-3">
+              {caseGroup.analyses.map((a) => (
+                <div
+                  key={a.id}
+                  className="border-b border-gray-100 pb-3 last:border-0 last:pb-0"
+                >
+                  <div className="flex items-start gap-2">
+                    <SuitabilityBadge value={a.suitability} />
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        to={`/analyses/${a.id}`}
+                        className="text-sm font-medium text-gray-800 hover:text-blue-600 line-clamp-1"
+                      >
+                        {a.article_title}
+                      </Link>
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">{a.summary}</p>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                        <span>{a.source_name}</span>
+                        <span>{a.published_at?.slice(0, 10)}</span>
+                        <a
+                          href={a.article_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:underline"
+                        >
+                          원문
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 우측: 심사 카드 */}
+        <div className="lg:w-[380px]">
+          <div
+            className={`bg-white rounded-xl border border-border p-6 lg:sticky lg:top-6 space-y-4 ${reviewSaving ? 'opacity-60 pointer-events-none' : ''}`}
+          >
+            <h2 className="text-sm font-semibold border-b pb-2">로앤굿 심사 (사건 단위)</h2>
+
+            <div className="space-y-1">
+              <div className="text-xs text-gray-400">심사 결과</div>
+              <ClientSuitabilityButtons
+                value={caseGroup.client_suitability}
+                onChange={(v) => handleReviewChange('client_suitability', v)}
+                disabled={reviewSaving}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={caseGroup.review_completed}
+                  onChange={(e) => handleReviewChange('review_completed', e.target.checked)}
+                  className="w-6 h-6 accent-navy cursor-pointer"
+                />
+                <span className="text-sm">심사 완료</span>
+              </label>
+              <label
+                className={`flex items-center gap-2 select-none ${
+                  caseGroup.review_completed ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'
+                }`}
+                title={!caseGroup.review_completed ? '심사 완료 후 체크 가능합니다' : undefined}
+              >
+                <input
+                  type="checkbox"
+                  checked={caseGroup.accepted}
+                  disabled={!caseGroup.review_completed || reviewSaving}
+                  onChange={(e) => handleReviewChange('accepted', e.target.checked)}
+                  className="w-6 h-6 accent-gold cursor-pointer disabled:cursor-not-allowed"
+                />
+                <span className="text-sm">통과</span>
+              </label>
+            </div>
+
+            <div className="border-t pt-4">
+              <button
+                onClick={() => downloadExcel({})}
+                className="w-full border border-border text-sm py-2 rounded hover:bg-gray-50"
+              >
+                📥 엑셀 내보내기
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
