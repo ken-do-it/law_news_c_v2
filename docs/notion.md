@@ -3,6 +3,8 @@
 > **프로젝트명**: LawNGood News Analyzer
 > **목적**: 소송금융 투자 검토를 위한 AI 기반 법률 뉴스 자동 수집·분석 시스템
 > **대상 사용자**: 로앤굿(LawNGood) 소송금융 심사팀
+>
+> 📌 **API·DB·모델 상세**: [FUNCTIONAL_SPEC.md](./FUNCTIONAL_SPEC.md) 참조
 
 ---
 

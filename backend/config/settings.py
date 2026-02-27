@@ -1,3 +1,7 @@
+"""
+Django settings — LawNGood AI 뉴스 분석 시스템
+버전: 1.0.1
+"""
 import os
 from pathlib import Path
 
@@ -122,7 +126,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "Law News Analyzer API",
     "DESCRIPTION": "AI 기반 법률 뉴스 분석 시스템 API",
-    "VERSION": "1.0.0",
+    "VERSION": "1.0.1",
     "SERVE_INCLUDE_SCHEMA": False,
 }
 

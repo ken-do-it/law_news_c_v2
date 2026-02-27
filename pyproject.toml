@@ -1,6 +1,6 @@
 [project]
 name = "law-news-analyzer"
-version = "1.0.0"
+version = "1.0.1"
 description = "AI 기반 법률 분쟁 사건 자동 발굴 시스템"
 requires-python = ">=3.12"
 dependencies = [
