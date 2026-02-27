@@ -216,18 +216,18 @@ export default function ReviewHome() {
         </p>
       </div>
 
-      {/* 요약 카드 — 전체 가로폭 헤더형, 칸 나눠서 */}
-      <div className="-mx-6 px-6 py-4 bg-gray-50/60 border-y border-border">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 max-w-[1600px] mx-auto">
-          <StatsCard compact icon="📋" label="전체 케이스" value={stats?.total_cases ?? '-'} sub="건" />
-          <StatsCard compact icon="✅" label="심사 완료" value={stats?.total_reviewed_cases ?? '-'} sub="건" />
-          <StatsCard compact icon="🎯" label="수임 통과" value={stats?.total_accepted_cases ?? '-'} sub="건" />
+      {/* 요약 카드 — 가로형 "라벨 : 값건", 1.5배 확대 */}
+      <div className="-mx-6 px-6 py-5 bg-gray-50/60 border-y border-border">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-[1600px] mx-auto">
+          <StatsCard horizontal large icon="📋" label="전체케이스" value={stats?.total_cases ?? '-'} sub="건" />
+          <StatsCard horizontal large icon="✅" label="심사완료" value={stats?.total_reviewed_cases ?? '-'} sub="건" />
+          <StatsCard horizontal large icon="🎯" label="수임 통과" value={stats?.total_accepted_cases ?? '-'} sub="건" />
           <StatsCard
-            compact
+            horizontal
+            large
             icon="📊"
             label="통과율"
-            value={stats ? `${stats.acceptance_rate_cases}%` : '-'}
-            sub="심사 완료 대비"
+            value={stats != null ? `${stats.acceptance_rate_cases}%` : '-'}
           />
         </div>
       </div>

@@ -4,9 +4,25 @@ interface Props {
   value: string | number;
   sub?: string;
   compact?: boolean;
+  /** 가로형: "라벨 : 값건" 형식 */
+  horizontal?: boolean;
+  /** 1.5배 확대 (horizontal과 함께 사용) */
+  large?: boolean;
 }
 
-export default function StatsCard({ icon, label, value, sub, compact }: Props) {
+export default function StatsCard({ icon, label, value, sub, compact, horizontal, large }: Props) {
+  if (horizontal && large) {
+    return (
+      <div className="bg-white rounded-lg border border-border px-4 py-3 flex items-center gap-3 min-w-0">
+        <span className="text-xl shrink-0">{icon}</span>
+        <div className="min-w-0">
+          <span className="text-base text-gray-600">{label}</span>
+          <span className="text-base text-gray-400 mx-1.5">:</span>
+          <span className="text-xl font-bold text-gray-900">{value}{sub && <span className="text-base font-normal text-gray-500 ml-1">{sub}</span>}</span>
+        </div>
+      </div>
+    );
+  }
   if (compact) {
     return (
       <div className="bg-white rounded-md border border-border px-2 py-1.5 flex items-center gap-1.5 min-w-0">
