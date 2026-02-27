@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { getKeywords, createKeyword, deleteKeyword } from '../lib/api';
 import type { Keyword } from '../lib/types';
+import { useToast } from '../components/Toast';
 
 export default function Settings() {
+  const { toast } = useToast();
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [newWord, setNewWord] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => { document.title = '키워드 관리 | LawNGood'; }, []);
 
   const fetchKeywords = async () => {
     const data = await getKeywords();
@@ -21,28 +25,30 @@ export default function Settings() {
       await createKeyword(newWord.trim());
       setNewWord('');
       await fetchKeywords();
+      toast('키워드가 추가되었습니다.');
     } catch {
-      alert('키워드 추가 실패');
+      toast('키워드 추가에 실패했습니다.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('정말 삭제하시겠습니까?')) return;
+    if (!window.confirm('정말 삭제하시겠습니까?')) return;
     try {
       await deleteKeyword(id);
       await fetchKeywords();
+      toast('키워드가 삭제되었습니다.', 'info');
     } catch {
-      alert('삭제 실패');
+      toast('삭제에 실패했습니다.', 'error');
     }
   };
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">설정</h1>
+      <h1 className="text-2xl font-bold">키워드 관리</h1>
 
-      <div className="bg-white rounded-xl border border-[var(--color-border)] p-6">
+      <div className="bg-white rounded-xl border border-border p-6">
         <h2 className="text-sm font-semibold mb-4">수집 키워드 관리</h2>
         <p className="text-xs text-gray-500 mb-4">뉴스 크롤링에 사용되는 검색 키워드를 관리합니다.</p>
 
@@ -50,7 +56,7 @@ export default function Settings() {
           {keywords.map((kw) => (
             <span
               key={kw.id}
-              className="inline-flex items-center gap-1.5 bg-[var(--color-navy)] text-white text-sm px-3 py-1.5 rounded-full"
+              className="inline-flex items-center gap-1.5 bg-navy text-white text-sm px-3 py-1.5 rounded-full"
             >
               {kw.word}
               <button
@@ -78,7 +84,7 @@ export default function Settings() {
           <button
             onClick={handleAdd}
             disabled={loading}
-            className="bg-[var(--color-gold)] text-white text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50"
+            className="bg-gold text-white text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50"
           >
             + 추가
           </button>

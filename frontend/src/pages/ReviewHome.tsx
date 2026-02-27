@@ -5,6 +5,7 @@ import type { AnalysisFilters, ReviewPayload } from '../lib/api';
 import type { Analysis, DashboardStats } from '../lib/types';
 import StatsCard from '../components/StatsCard';
 import SuitabilityBadge from '../components/SuitabilityBadge';
+import TableSkeleton from '../components/TableSkeleton';
 
 const SUITABILITY_OPTIONS = ['High', 'Medium', 'Low'] as const;
 
@@ -124,12 +125,14 @@ interface Filters {
   suitability: string[];   // 다중 선택 (빈 배열 = 전체)
   review_completed: BoolFilter;
   accepted: BoolFilter;
+  unreviewed_first: boolean;
 }
 
 const DEFAULT_FILTERS: Filters = {
   suitability: [],
   review_completed: 'all',
   accepted: 'all',
+  unreviewed_first: false,
 };
 
 export default function ReviewHome() {
@@ -149,13 +152,17 @@ export default function ReviewHome() {
       suitability: suitabilityParam ? [suitabilityParam] : [],
       review_completed: 'all',
       accepted: 'all',
+      unreviewed_first: false,
     };
   });
 
   const PAGE_SIZE = 20;
 
   const buildApiFilters = useCallback((f: Filters, p: number): AnalysisFilters => {
-    const params: AnalysisFilters = { ordering: '-analyzed_at', page: p };
+    const params: AnalysisFilters = {
+      ordering: f.unreviewed_first ? 'review_completed,-analyzed_at' : '-analyzed_at',
+      page: p,
+    };
     if (f.suitability.length > 0) params.suitability = f.suitability.join(',');
     if (f.review_completed !== 'all') params.review_completed = f.review_completed === 'true';
     if (f.accepted !== 'all') params.accepted = f.accepted === 'true';
@@ -204,10 +211,17 @@ export default function ReviewHome() {
     setFilters(DEFAULT_FILTERS);
   };
 
+  useEffect(() => { document.title = '심사 현황 | LawNGood'; }, []);
+
   const isFiltered =
     filters.suitability.length > 0 ||
     filters.review_completed !== 'all' ||
     filters.accepted !== 'all';
+
+  const toggleUnreviewedFirst = () => {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, unreviewed_first: !prev.unreviewed_first }));
+  };
 
   const handleReviewChange = async (
     id: number,
@@ -300,7 +314,19 @@ export default function ReviewHome() {
               { value: 'false', label: '미통과' },
             ]}
           />
-          {isFiltered && (
+          {/* 미심사 먼저 토글 */}
+          <button
+            onClick={toggleUnreviewedFirst}
+            className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
+              filters.unreviewed_first
+                ? 'bg-[var(--color-navy)] text-white border-[var(--color-navy)] font-semibold'
+                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            미심사 먼저
+          </button>
+
+          {(isFiltered || filters.unreviewed_first) && (
             <button
               onClick={resetFilters}
               className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 ml-auto"
@@ -324,19 +350,24 @@ export default function ReviewHome() {
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">로딩 중...</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody><TableSkeleton cols={8} rows={10} /></tbody>
+            </table>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-gray-500 bg-gray-50">
-                  <th className="px-4 py-3 font-medium">AI 적합도</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">AI 적합도</th>
                   <th className="px-4 py-3 font-medium">기사 제목</th>
-                  <th className="px-4 py-3 font-medium">분야</th>
-                  <th className="px-4 py-3 font-medium">로앤굿 심사결과</th>
-                  <th className="px-4 py-3 font-medium text-center">심사완료</th>
-                  <th className="px-4 py-3 font-medium text-center">통과여부</th>
-                  <th className="px-4 py-3 font-medium">날짜</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">분야</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">로앤굿 심사결과</th>
+                  <th className="px-4 py-3 font-medium text-center whitespace-nowrap">심사완료</th>
+                  <th className="px-4 py-3 font-medium text-center whitespace-nowrap">통과여부</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">케이스 ID</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">날짜</th>
                 </tr>
               </thead>
               <tbody>
@@ -403,6 +434,20 @@ export default function ReviewHome() {
                         />
                       </td>
 
+                      {/* 케이스 ID */}
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {a.case_id ? (
+                          <Link
+                            to={`/analyses?search=${encodeURIComponent(a.case_id)}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {a.case_id}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+
                       {/* 날짜 */}
                       <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
                         {a.published_at?.slice(0, 10)}
@@ -412,7 +457,7 @@ export default function ReviewHome() {
                 })}
                 {analyses.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-gray-400">
+                    <td colSpan={8} className="py-12 text-center text-gray-400">
                       분석 데이터가 없습니다
                     </td>
                   </tr>
@@ -422,28 +467,34 @@ export default function ReviewHome() {
           </div>
         )}
 
-        {/* 페이지네이션 */}
+        {/* 페이지네이션 — 숫자로 바로 이동 */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-border">
-            <span className="text-xs text-gray-500">
-              {page} / {totalPages} 페이지
-            </span>
-            <div className="flex gap-2">
+          <div className="flex items-center justify-center gap-1 px-5 py-3 border-t border-border">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1 text-sm rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100"
+            >
+              ‹
+            </button>
+            {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((p) => (
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                key={p}
+                onClick={() => setPage(p)}
+                className={`px-3 py-1 text-sm rounded border border-gray-200 ${
+                  p === page ? 'bg-navy text-white border-navy' : 'hover:bg-gray-100'
+                }`}
               >
-                이전
+                {p}
               </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
-              >
-                다음
-              </button>
-            </div>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1 text-sm rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100"
+            >
+              ›
+            </button>
           </div>
         )}
       </div>

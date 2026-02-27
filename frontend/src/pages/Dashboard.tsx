@@ -136,6 +136,8 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<Analysis[]>([]);
 
+  useEffect(() => { document.title = 'AI 대시보드 | LawNGood'; }, []);
+
   const refresh = () => {
     getStats().then(setStats);
     getAnalyses({ ordering: '-analyzed_at' }).then((r) => setRecent(r.results.slice(0, 8)));
