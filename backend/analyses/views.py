@@ -422,11 +422,16 @@ class CaseGroupViewSet(viewsets.ModelViewSet):
       PATCH  /api/case-groups/{id}/              → 심사 필드 업데이트
     """
 
-    queryset = CaseGroup.objects.prefetch_related("analyses").all()
+    queryset = CaseGroup.objects.annotate(
+        article_count=Count("analyses", filter=Q(analyses__is_relevant=True)),
+        high_count=Count("analyses", filter=Q(analyses__suitability="High")),
+        medium_count=Count("analyses", filter=Q(analyses__suitability="Medium")),
+        low_count=Count("analyses", filter=Q(analyses__suitability="Low")),
+    )
     filterset_class = CaseGroupFilter
     search_fields = ["case_id", "name"]
-    ordering = ["-created_at"]
-    ordering_fields = ["created_at", "case_id", "review_completed"]
+    ordering = ["-article_count"]
+    ordering_fields = ["created_at", "case_id", "review_completed", "article_count"]
     http_method_names = ["get", "patch", "head", "options"]
 
     def get_serializer_class(self):

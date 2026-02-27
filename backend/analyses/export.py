@@ -132,7 +132,7 @@ def export_case_groups_to_excel(queryset) -> io.BytesIO:
 
     for idx, cg in enumerate(queryset, 1):
         row = idx + 1
-        article_count = cg.analyses.filter(is_relevant=True).count() if hasattr(cg, "analyses") else 0
+        article_count = getattr(cg, "article_count", None) or (cg.analyses.filter(is_relevant=True).count() if hasattr(cg, "analyses") else 0)
         values = [
             idx,
             cg.case_id or "",

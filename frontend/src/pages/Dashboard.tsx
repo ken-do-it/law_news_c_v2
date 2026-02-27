@@ -480,11 +480,14 @@ export default function Dashboard() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs text-gray-400 bg-gray-50">
-                <th className="px-4 py-3 font-medium">적합도</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">AI 적합도</th>
                 <th className="px-4 py-3 font-medium">기사 제목</th>
                 <th className="px-4 py-3 font-medium">분야</th>
                 <th className="px-4 py-3 font-medium">상대방</th>
                 <th className="px-4 py-3 font-medium">단계</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">로앤굿 심사결과</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">심사완료</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">통과여부</th>
                 <th className="px-4 py-3 font-medium">날짜</th>
               </tr>
             </thead>
@@ -510,6 +513,11 @@ export default function Dashboard() {
                   <td className="px-4 py-3">
                     <StageBadge value={a.stage} />
                   </td>
+                  <td className="px-4 py-3">
+                    {a.client_suitability ? <SuitabilityBadge value={a.client_suitability} /> : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-sm">{a.review_completed ? '✓' : '—'}</td>
+                  <td className="px-4 py-3 text-sm">{a.accepted ? '✓' : '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
                     {a.published_at?.slice(0, 10)}
                   </td>
@@ -517,7 +525,7 @@ export default function Dashboard() {
               ))}
               {recent.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                  <td colSpan={9} className="py-12 text-center text-gray-400">
                     분석 데이터가 없습니다
                   </td>
                 </tr>

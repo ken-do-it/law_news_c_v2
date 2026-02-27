@@ -1,20 +1,45 @@
-import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getCaseGroupByCaseId, updateCaseGroupReview, downloadExcel } from '../lib/api';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { getCaseGroupByCaseId, getAnalysis, updateCaseGroupReview, downloadExcel } from '../lib/api';
 import type { CaseGroupDetail, ReviewPayload } from '../lib/api';
+import type { Analysis } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
+import StageBadge from '../components/StageBadge';
 import ClientSuitabilityButtons from '../components/ClientSuitabilityButtons';
 import { useToast } from '../components/Toast';
 
+const reasonBg: Record<string, string> = {
+  High: 'rgba(225,29,72,0.04)',
+  Medium: 'rgba(245,158,11,0.04)',
+  Low: 'rgba(107,114,128,0.04)',
+};
+
 export default function CaseDetail() {
   const { case_id } = useParams<{ case_id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const articleId = searchParams.get('article');
+  const articleRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const { toast } = useToast();
   const [caseGroup, setCaseGroup] = useState<CaseGroupDetail | null>(null);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<Analysis | null>(null);
   const [reviewSaving, setReviewSaving] = useState(false);
+
+  useEffect(() => {
+    if (articleId) getAnalysis(Number(articleId)).then(setSelectedAnalysis);
+    else setSelectedAnalysis(null);
+  }, [articleId]);
 
   useEffect(() => {
     if (case_id) getCaseGroupByCaseId(case_id).then(setCaseGroup);
   }, [case_id]);
+
+  useEffect(() => {
+    if (caseGroup && articleId) {
+      const id = Number(articleId);
+      const el = articleRefs.current[id];
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [caseGroup, articleId]);
 
   useEffect(() => {
     if (caseGroup) {
@@ -108,13 +133,14 @@ export default function CaseDetail() {
               {caseGroup.analyses.map((a) => (
                 <div
                   key={a.id}
-                  className="border-b border-gray-100 pb-3 last:border-0 last:pb-0"
+                  ref={(r) => { articleRefs.current[a.id] = r; }}
+                  className={`border-b border-gray-100 pb-3 last:border-0 last:pb-0 ${articleId === String(a.id) ? 'ring-2 ring-navy ring-inset rounded-lg p-2 -m-2' : ''}`}
                 >
                   <div className="flex items-start gap-2">
                     <SuitabilityBadge value={a.suitability} />
                     <div className="flex-1 min-w-0">
                       <Link
-                        to={`/analyses/${a.id}`}
+                        to={`/analyses/case/${case_id}?article=${a.id}`}
                         className="text-sm font-medium text-gray-800 hover:text-blue-600 line-clamp-1"
                       >
                         {a.article_title}
@@ -138,6 +164,36 @@ export default function CaseDetail() {
               ))}
             </div>
           </div>
+
+          {/* 선택된 기사 상세 (AI 분석 요약, 판단 근거) */}
+          {selectedAnalysis && (
+            <div className="bg-white rounded-xl border border-border p-6">
+              <h2 className="text-sm font-semibold mb-3">📋 기사 상세 — {selectedAnalysis.article?.title?.slice(0, 40)}…</h2>
+              <div className="flex items-center gap-2 mb-3">
+                <SuitabilityBadge value={selectedAnalysis.suitability} />
+                <StageBadge value={selectedAnalysis.stage} />
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-4">{selectedAnalysis.summary}</p>
+              <div
+                className="rounded-lg p-4 border border-gray-100"
+                style={{ backgroundColor: reasonBg[selectedAnalysis.suitability] || '#fff' }}
+              >
+                <div className="text-xs font-semibold text-gray-500 mb-1">판단 근거</div>
+                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{selectedAnalysis.suitability_reason}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const p = new URLSearchParams(searchParams);
+                  p.delete('article');
+                  setSearchParams(p);
+                }}
+                className="inline-block mt-3 text-xs text-gray-400 hover:text-gray-600"
+              >
+                상세 접기
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 우측: 심사 카드 */}

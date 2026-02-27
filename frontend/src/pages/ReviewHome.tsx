@@ -4,7 +4,7 @@ import { getCaseGroups, getStats, updateCaseGroupReview, downloadExcelCase } fro
 import type { CaseGroupFilters, ReviewPayload } from '../lib/api';
 import type { CaseGroup, DashboardStats } from '../lib/types';
 import StatsCard from '../components/StatsCard';
-import SuitabilityBadge from '../components/SuitabilityBadge';
+import AiSuitabilityDisplay from '../components/AiSuitabilityDisplay';
 import TableSkeleton from '../components/TableSkeleton';
 
 const SUITABILITY_OPTIONS = ['High', 'Medium', 'Low'] as const;
@@ -118,7 +118,7 @@ export default function ReviewHome() {
 
   const buildApiFilters = useCallback((f: Filters, p: number): CaseGroupFilters => {
     const params: CaseGroupFilters = {
-      ordering: f.unreviewed_first ? 'review_completed,-created_at' : '-created_at',
+      ordering: f.unreviewed_first ? 'review_completed,-article_count' : '-article_count',
       page: p,
     };
     if (f.review_completed !== 'all') params.review_completed = f.review_completed === 'true';
@@ -206,7 +206,7 @@ export default function ReviewHome() {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 w-full max-w-[1600px] mx-auto space-y-6">
       {/* 헤더 */}
       <div>
         <h1 className="text-2xl font-bold">심사 현황</h1>
@@ -215,18 +215,20 @@ export default function ReviewHome() {
         </p>
       </div>
 
-      {/* 요약 카드 — 컴팩트 (정보 전달 중심) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 max-w-xl">
-        <StatsCard compact icon="📋" label="전체 케이스" value={stats?.total_cases ?? '-'} sub="건" />
-        <StatsCard compact icon="✅" label="심사 완료" value={stats?.total_reviewed_cases ?? '-'} sub="건" />
-        <StatsCard compact icon="🎯" label="수임 통과" value={stats?.total_accepted_cases ?? '-'} sub="건" />
-        <StatsCard
-          compact
-          icon="📊"
-          label="통과율"
-          value={stats ? `${stats.acceptance_rate_cases}%` : '-'}
-          sub="심사 완료 대비"
-        />
+      {/* 요약 카드 — 전체 가로폭 헤더형, 칸 나눠서 */}
+      <div className="-mx-6 px-6 py-4 bg-gray-50/60 border-y border-border">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 max-w-[1600px] mx-auto">
+          <StatsCard compact icon="📋" label="전체 케이스" value={stats?.total_cases ?? '-'} sub="건" />
+          <StatsCard compact icon="✅" label="심사 완료" value={stats?.total_reviewed_cases ?? '-'} sub="건" />
+          <StatsCard compact icon="🎯" label="수임 통과" value={stats?.total_accepted_cases ?? '-'} sub="건" />
+          <StatsCard
+            compact
+            icon="📊"
+            label="통과율"
+            value={stats ? `${stats.acceptance_rate_cases}%` : '-'}
+            sub="심사 완료 대비"
+          />
+        </div>
       </div>
 
       {/* 필터 바 */}
@@ -299,7 +301,7 @@ export default function ReviewHome() {
         {loading ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <tbody><TableSkeleton cols={8} rows={10} /></tbody>
+              <tbody><TableSkeleton cols={7} rows={10} /></tbody>
             </table>
           </div>
         ) : (
@@ -310,6 +312,7 @@ export default function ReviewHome() {
                   <th className="px-4 py-3 font-medium whitespace-nowrap">케이스 ID</th>
                   <th className="px-4 py-3 font-medium">사건명</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap">기사 수</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">AI 적합도</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap">로앤굿 심사결과</th>
                   <th className="px-4 py-3 font-medium text-center whitespace-nowrap">심사완료</th>
                   <th className="px-4 py-3 font-medium text-center whitespace-nowrap">통과여부</th>
@@ -340,6 +343,9 @@ export default function ReviewHome() {
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{c.article_count}</td>
+                      <td className="px-4 py-3">
+                        <AiSuitabilityDisplay dist={c.suitability_distribution} />
+                      </td>
                       <td className="px-4 py-3">
                         <ClientSuitabilityButtons
                           value={c.client_suitability}
@@ -375,7 +381,7 @@ export default function ReviewHome() {
                 })}
                 {cases.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-400">
+                    <td colSpan={7} className="py-12 text-center text-gray-400">
                       사건 데이터가 없습니다
                     </td>
                   </tr>

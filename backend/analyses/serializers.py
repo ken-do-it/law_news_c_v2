@@ -7,18 +7,36 @@ from .models import Analysis, CaseGroup
 
 class CaseGroupSerializer(serializers.ModelSerializer):
     article_count = serializers.SerializerMethodField()
+    suitability_distribution = serializers.SerializerMethodField()
 
     class Meta:
         model = CaseGroup
         fields = [
             "id", "case_id", "name", "description", "article_count", "created_at",
             "review_completed", "client_suitability", "accepted",
+            "suitability_distribution",
         ]
 
     def get_article_count(self, obj):
         if hasattr(obj, "article_count"):
             return obj.article_count
         return obj.analyses.filter(is_relevant=True).count()
+
+    def get_suitability_distribution(self, obj):
+        """사건 내 모든 기사의 AI 적합도 분포 (ViewSet annotation 기반)"""
+        result = {}
+        if getattr(obj, "high_count", 0) > 0:
+            result["High"] = obj.high_count
+        if getattr(obj, "medium_count", 0) > 0:
+            result["Medium"] = obj.medium_count
+        if getattr(obj, "low_count", 0) > 0:
+            result["Low"] = obj.low_count
+        if not result:
+            # annotation 없을 때 fallback: DB 쿼리
+            from django.db.models import Count
+            dist = obj.analyses.values("suitability").annotate(count=Count("id"))
+            result = {d["suitability"]: d["count"] for d in dist if d.get("suitability")}
+        return result
 
 
 class CaseGroupDetailSerializer(serializers.ModelSerializer):
@@ -45,11 +63,10 @@ class CaseGroupDetailSerializer(serializers.ModelSerializer):
         return RelatedArticleSerializer(analyses, many=True).data
 
     def get_suitability_distribution(self, obj):
+        """사건 내 모든 기사의 AI 적합도 분포 (기사가 있으면 집계, is_relevant 무관)"""
         from django.db.models import Count
-        dist = obj.analyses.filter(is_relevant=True).values("suitability").annotate(
-            count=Count("id")
-        )
-        return {d["suitability"]: d["count"] for d in dist}
+        dist = obj.analyses.values("suitability").annotate(count=Count("id"))
+        return {d["suitability"]: d["count"] for d in dist if d.get("suitability")}
 
 
 class CaseGroupReviewSerializer(serializers.ModelSerializer):

@@ -81,6 +81,7 @@ export interface CaseGroup {
   review_completed: boolean;
   client_suitability: 'High' | 'Medium' | 'Low' | null;
   accepted: boolean;
+  suitability_distribution?: Record<string, number>;
 }
 
 export interface CaseGroupDetail extends CaseGroup {

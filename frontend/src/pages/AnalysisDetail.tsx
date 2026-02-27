@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { getAnalysis, reanalyze, downloadExcel, updateReview } from '../lib/api';
 import type { Analysis } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
@@ -40,6 +40,11 @@ export default function AnalysisDetail() {
         </div>
       </div>
     );
+  }
+
+  // case_id가 있으면 CaseDetail로 리다이렉트 (동일한 case의 모든 기사 표시)
+  if (analysis.case_group?.case_id) {
+    return <Navigate to={`/analyses/case/${analysis.case_group.case_id}?article=${id}`} replace />;
   }
 
   const article = analysis.article;
