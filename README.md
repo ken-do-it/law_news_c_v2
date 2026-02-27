@@ -390,8 +390,12 @@ law_news_c_v2/                    ← 프로젝트 루트
 ├── .env.example                  ← 환경변수 템플릿
 ├── Justfile                      ← 명령어 정의 (just xxx)
 ├── pyproject.toml                ← Python 패키지 목록
-├── PRD.md                        ← 제품 요구사항 문서
-├── 기능명세서.md                   ← 백엔드 기능 상세 문서
+├── docs/                         ← 문서 (docs/README.md에 목차)
+│   ├── FUNCTIONAL_SPEC.md        ← 기능 명세서 (통합, API·DB·프론트 상세)
+│   ├── PRD.md                    ← 제품 요구사항 문서
+│   ├── DASHBOARD_REALTIME.md     ← 대시보드 실시간 갱신·스케줄링 구현
+│   ├── PRIORITY_SORT.md          ← 피해 규모·피해자 수 기반 우선순위 정렬
+│   └── notion.md                 ← 기술 문서 (아키텍처·워크플로우)
 ├── README.md                     ← 이 문서
 │
 ├── backend/                      ← Django 백엔드

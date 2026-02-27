@@ -1,6 +1,29 @@
 # LawNGood — 기능 명세서 (Functional Specification)
 
-> 버전: v2.1 | 작성일: 2026-02-24 | 기반 코드: law_news_c_v2
+> 버전: v2.2 | 작성일: 2026-02-27 | 기반 코드: law_news_c_v2
+>
+> 이 문서는 `backend/` 디렉토리 내 Django 앱별 모델, API, 비즈니스 로직과 프론트엔드 명세를 통합 기술합니다.
+
+---
+
+## 목차
+
+1. [FS-001. 뉴스 수집 파이프라인](#fs-001-뉴스-수집-파이프라인)
+2. [FS-002. 자동 스케줄러](#fs-002-자동-스케줄러)
+3. [FS-003. LLM 분석 엔진](#fs-003-llm-분석-엔진)
+4. [FS-004. 케이스 자동 그룹핑](#fs-004-케이스-자동-그룹핑)
+5. [FS-005. REST API 명세](#fs-005-rest-api-명세)
+6. [FS-006. 데이터베이스 스키마](#fs-006-데이터베이스-스키마)
+7. [FS-007. 프론트엔드 페이지 명세](#fs-007-프론트엔드-페이지-명세)
+8. [FS-008. 엑셀 내보내기 명세](#fs-008-엑셀-내보내기-명세)
+9. [FS-009. Article 상태 전이도](#fs-009-article-상태-전이도)
+10. [FS-010. 환경 변수 명세](#fs-010-환경-변수-명세)
+11. [FS-011. 초기 데이터 시드](#fs-011-초기-데이터-시드)
+12. [FS-012. Admin 인터페이스](#fs-012-admin-인터페이스)
+13. [FS-013. config — Django 프로젝트 설정](#fs-013-config--django-프로젝트-설정)
+14. [FS-014. 크롤러 상세](#fs-014-크롤러-상세)
+15. [FS-015. 모델 상세 (articles)](#fs-015-모델-상세-articles)
+16. [FS-016. 모델 상세 (analyses)](#fs-016-모델-상세-analyses)
 
 ---
 
@@ -34,6 +57,13 @@ crawl_news()
 ### 출력
 - 신규 `Article` 레코드 (status='pending')
 - 중복 URL → 스킵 (기존 레코드 유지)
+
+### 태스크 변형
+
+| 함수 | 설명 |
+|------|------|
+| `crawl_news()` | Celery 태스크. 활성 키워드 순회 → `search_naver_news()` 호출 → URL 중복 체크 후 신규만 저장. 완료 후 `analyze_pending_articles.delay()` 자동 트리거 (Redis 필요) |
+| `crawl_news_sync()` | 동기 실행 래퍼. Celery 없이 직접 호출. `just crawl` 명령에서 사용 |
 
 ### 예외 처리
 
@@ -155,6 +185,22 @@ analyze_single_article(article_id)
   └── article.status = 'analyzed' → 저장
       [오류 시] article.status = 'failed', retry_count++ → 저장
 ```
+
+### validate_and_parse 처리 흐름 (validators.py)
+
+1. JSON 파싱 (`json.loads`)
+2. 필수 필드 검증: `suitability`, `suitability_reason`, `case_category`, `summary`
+3. `suitability` 값 검증 (High/Medium/Low 아니면 Low로 보정)
+4. `stage` 값 검증 (유효하지 않으면 빈값으로 보정)
+5. 기본값 설정: defendant, damage_amount, victim_count, stage, stage_detail, case_name, is_relevant
+6. `is_relevant` 타입 검증 (boolean 아니면 True로 보정)
+7. `summary` 길이 제한 (1000자)
+
+### build_messages (prompts.py)
+
+- 본문 3000자 제한 (토큰 절약)
+- 기존 사건 그룹 목록을 시스템 프롬프트 말미에 추가
+- system → few-shot (user/assistant 3쌍) → user(실제 기사) 순서로 메시지 구성
 
 ### 재시도 로직
 
@@ -387,13 +433,44 @@ DELETE /api/keywords/{id}/
 
 ### 5-7. 기타 API
 
+#### ArticleViewSet
+
+| Method | URL | 설명 |
+|--------|-----|------|
+| GET | `/api/articles/` | 기사 목록 (필터, 검색, 페이지네이션) |
+| GET | `/api/articles/{id}/` | 기사 상세 |
+| POST | `/api/articles/{id}/reanalyze/` | 기사 재분석 요청 |
+
+#### KeywordViewSet
+
+| Method | URL | 설명 |
+|--------|-----|------|
+| GET | `/api/keywords/` | 키워드 목록 |
+| POST | `/api/keywords/` | 키워드 추가 |
+| DELETE | `/api/keywords/{id}/` | 키워드 삭제 |
+
+#### MediaSourceViewSet
+
+| Method | URL | 설명 |
+|--------|-----|------|
+| GET | `/api/sources/` | 언론사 목록 |
+
+#### CaseGroupViewSet
+
+| Method | URL | 설명 |
+|--------|-----|------|
+| GET | `/api/case-groups/` | 케이스 그룹 목록 |
+| GET | `/api/case-groups/{id}/` | 케이스 그룹 상세 |
+
+- 검색: case_id, name
+- 정렬: -created_at
+- CaseGroupSerializer: article_count 어노테이션 포함
+
+#### Swagger
+
 ```
-GET /api/articles/          → 기사 목록 (status, source, 날짜 필터 지원)
-GET /api/articles/{id}/     → 기사 상세
-GET /api/sources/           → 언론사 목록
-GET /api/case-groups/       → 케이스 그룹 목록
-GET /api/case-groups/{id}/  → 케이스 그룹 상세
 GET /api/docs/              → Swagger UI (drf-spectacular)
+GET /api/schema/            → OpenAPI 스키마
 ```
 
 ---
@@ -501,6 +578,50 @@ MediaSource (1) ──── (N) Article (1) ──── (1) Analysis
                     ArticleKeyword          CaseGroup (1) ──── (N) Analysis
                           │
                        Keyword
+```
+
+### ERD (엔티티 관계도)
+
+```
+┌─────────────────┐       ┌────────────────────────────────────────────┐
+│   MediaSource   │       │                 Article                    │
+│─────────────────│       │────────────────────────────────────────────│
+│ PK id           │       │ PK id                                     │
+│    name (uniq)  │◄──1:N─│ FK source_id → MediaSource (nullable)     │
+│    url          │       │    title                                  │
+│    is_active    │       │    content                                │
+│    created_at   │       │    url (unique)                           │
+└─────────────────┘       │    author                                 │
+                          │    published_at                           │
+┌─────────────────┐       │    collected_at                           │
+│    Keyword      │       │    status (pending/analyzing/analyzed/failed)│
+│─────────────────│       │    retry_count                            │
+│ PK id           │       └────────────┬───────────────────────────────┘
+│    word (uniq)  │                    │
+│    is_active    │                    │ 1:1
+│    created_at   │                    │
+└────────┬────────┘                    │
+         │                             ▼
+         │ M:N              ┌────────────────────────────────────────────┐
+         │ (ArticleKeyword) │                Analysis                    │
+         └─────────────────▶│────────────────────────────────────────────│
+                            │ PK id                                     │
+┌─────────────────┐         │ FK article_id → Article (OneToOne)        │
+│   CaseGroup     │         │ FK case_group_id → CaseGroup (nullable)  │
+│─────────────────│         │    suitability (High/Medium/Low)          │
+│ PK id           │◄───N:1──│    suitability_reason                     │
+│    case_id (uniq│         │    case_category                          │
+│    name         │         │    defendant                              │
+│    description  │         │    damage_amount                          │
+│    created_at   │         │    victim_count                            │
+│    updated_at   │         │    stage                                  │
+└─────────────────┘         │    stage_detail                           │
+                            │    summary                                │
+                            │    is_relevant                            │
+                            │    llm_model                              │
+                            │    prompt_tokens / completion_tokens       │
+                            │    analyzed_at                            │
+                            └────────────────────────────────────────────┘
 ```
 
 ---
@@ -717,11 +838,11 @@ App (React Router)
 
 ## FS-011. 초기 데이터 시드
 
-**명령어**: `python manage.py seed_initial_data`
+**명령어**: `python manage.py seed_initial_data` (또는 `just seed`)
 
 **생성 내용**:
-- MediaSource: 80개 이상 주요 언론사 (조선일보, 중앙일보, KBS, MBC, SBS, 한겨레 등)
-- Keyword: `NEWS_KEYWORDS` 환경변수에 정의된 키워드 목록
+- MediaSource: 80개 이상 주요 언론사 (종합일간지, 방송/통신, 경제, 인터넷, IT 전문, 매거진, 전문지, 지역)
+- Keyword: 7개 기본 키워드 (`get_or_create`): 소송, 손해배상, 집단소송, 공동소송, 피해자, 피해보상, 피해구제
 
 ---
 
@@ -747,10 +868,205 @@ App (React Router)
 
 ---
 
+## FS-013. config — Django 프로젝트 설정
+
+**경로**: `backend/config/`
+
+### settings.py
+
+| 설정 그룹 | 주요 설정 |
+|----------|----------|
+| INSTALLED_APPS | django 기본 + rest_framework, django_filters, corsheaders, drf_spectacular, articles, analyses |
+| DATABASE | SQLite (backend/db.sqlite3) |
+| REST_FRAMEWORK | PageNumberPagination(20), DjangoFilterBackend, SearchFilter, OrderingFilter |
+| CORS | localhost:5173, localhost:3000 허용 |
+| Celery | Redis broker/backend, JSON 직렬화, Asia/Seoul |
+| LLM | OPENAI_API_KEY, GEMINI_API_KEY, LLM_MODEL, GEMINI_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS |
+| Naver | NAVER_CLIENT_ID, NAVER_CLIENT_SECRET |
+| i18n | ko-kr, Asia/Seoul |
+
+### urls.py
+
+| URL 패턴 | 대상 |
+|----------|------|
+| `/admin/` | Django 관리자 페이지 |
+| `/api/` | articles.urls + analyses.urls |
+| `/api/schema/` | drf-spectacular OpenAPI 스키마 |
+| `/api/docs/` | Swagger UI |
+
+### celery.py
+
+- Django 설정 기반 Celery 앱 구성
+- `autodiscover_tasks()`: articles, analyses 앱의 tasks.py 자동 등록
+
+---
+
+## FS-014. 크롤러 상세
+
+**모듈**: `backend/articles/crawlers.py`
+
+| 함수 | 설명 |
+|------|------|
+| `search_naver_news(keyword, display=100)` | 네이버 뉴스 검색 API 호출. 키워드별 최대 100건 반환 |
+| `fetch_article_content(naver_url)` | 네이버 뉴스 페이지에서 `#dic_area` 영역의 본문 텍스트 추출 |
+| `clean_html(text)` | HTML 태그 및 엔티티 제거 |
+| `parse_naver_date(date_str)` | 네이버 API 날짜 형식 → datetime 변환 |
+| `extract_source_from_url(url)` | URL 도메인을 언론사명으로 매핑 (60개+ 도메인) |
+| `extract_source_from_naver_page(url)` | 네이버 뉴스 페이지에서 언론사 로고 alt 텍스트 추출 |
+
+**언론사 식별 2단계 프로세스:**
+1. `extract_source_from_url`: originallink 도메인으로 매핑 (빠르고 정확)
+2. `extract_source_from_naver_page`: 1단계 실패 시 네이버 페이지 스크래핑 (느리지만 범용)
+
+---
+
+## FS-015. 모델 상세 (articles)
+
+### MediaSource (언론사)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `id` | BigAutoField (PK) | 자동 증가 기본키 |
+| `name` | CharField(100), unique | 언론사명 (예: "조선일보") |
+| `url` | URLField(500), blank | 언론사 홈페이지 URL |
+| `is_active` | BooleanField, default=True | 활성화 여부 |
+| `created_at` | DateTimeField, auto_now_add | 등록일시 |
+
+- 초기 데이터: 80개 언론사 (종합일간지, 방송/통신, 경제, 인터넷, IT 전문, 매거진, 지역)
+
+### Keyword (검색 키워드)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `id` | BigAutoField (PK) | 자동 증가 기본키 |
+| `word` | CharField(50), unique | 검색 키워드 (예: "집단소송") |
+| `is_active` | BooleanField, default=True | 활성화 여부 |
+| `created_at` | DateTimeField, auto_now_add | 등록일시 |
+
+- 초기 데이터: 소송, 손해배상, 집단소송, 공동소송, 피해자, 피해보상, 피해구제 (7개)
+
+### Article (기사)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `id` | BigAutoField (PK) | 자동 증가 기본키 |
+| `source` | FK → MediaSource, nullable | 언론사 |
+| `title` | CharField(500) | 기사 제목 (HTML 태그 제거됨) |
+| `content` | TextField | 기사 본문 (네이버 뉴스 페이지에서 추출) |
+| `url` | URLField(1000), unique | 기사 URL (중복 크롤링 방지 키) |
+| `author` | CharField(100), blank | 기자명 |
+| `published_at` | DateTimeField | 기사 발행일시 |
+| `collected_at` | DateTimeField, auto_now_add | 수집일시 |
+| `status` | CharField(20), indexed | 상태: `pending` / `analyzing` / `analyzed` / `failed` |
+| `retry_count` | IntegerField, default=0 | 분석 재시도 횟수 |
+| `keywords` | M2M → Keyword (through ArticleKeyword) | 수집에 사용된 키워드 |
+
+- 인덱스: `status`, `-published_at`
+
+### ArticleKeyword (기사-키워드 중간 테이블)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `article` | FK → Article | 기사 |
+| `keyword` | FK → Keyword | 키워드 |
+| `created_at` | DateTimeField, auto_now_add | 연결일시 |
+
+- unique_together: (article, keyword)
+
+### Article API 필터 파라미터
+
+| 파라미터 | 설명 | 예시 |
+|---------|------|------|
+| `status` | 상태 필터 | `pending`, `analyzed` |
+| `source` | 언론사 ID | `1` |
+| `date_from` | 발행일 시작 | `2026-02-01` |
+| `date_to` | 발행일 끝 | `2026-02-20` |
+| `search` | 제목/본문 검색 | `쿠팡` |
+| `ordering` | 정렬 | `-published_at`, `collected_at` |
+
+---
+
+## FS-016. 모델 상세 (analyses)
+
+### CaseGroup (사건 그룹)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `id` | BigAutoField (PK) | 자동 증가 기본키 |
+| `case_id` | CharField(30), unique | 사건 ID (예: "CASE-2026-001") |
+| `name` | CharField(200) | 사건명 (예: "쿠팡 개인정보 유출") |
+| `description` | TextField, blank | 사건 설명 |
+| `created_at` | DateTimeField, auto_now_add | 생성일시 |
+| `updated_at` | DateTimeField, auto_now | 수정일시 |
+
+**클래스 메서드:** `generate_next_case_id()` — 현재 연도 기반으로 `CASE-YYYY-NNN` 형식의 다음 ID 생성
+
+### Analysis (분석 결과)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `article` | OneToOneField → Article | 분석 대상 기사 (1:1) |
+| `case_group` | FK → CaseGroup, nullable | 소속 사건 그룹 |
+| `suitability` | CharField(10), indexed | 적합도: `High` / `Medium` / `Low` |
+| `suitability_reason` | TextField | 판단 근거 (C1~C6, X1 참조) |
+| `case_category` | CharField(100), indexed | 사건 분야 |
+| `defendant` | CharField(200), blank | 상대방 (기업명/기관명) |
+| `damage_amount` | CharField(200), blank | 피해 규모 |
+| `victim_count` | CharField(200), blank | 피해자 수 |
+| `stage` | CharField(50), indexed | 소송 단계 |
+| `stage_detail` | CharField(200), blank | 단계 상세 설명 |
+| `summary` | TextField | AI 생성 3~5문장 요약 |
+| `is_relevant` | BooleanField, default=True, indexed | 법적 분쟁 관련 여부 |
+| `llm_model` | CharField(50) | 사용된 LLM 모델명 |
+| `prompt_tokens` / `completion_tokens` | IntegerField | 토큰 수 |
+| `analyzed_at` | DateTimeField, auto_now_add | 분석 완료일시 |
+
+**stage 선택지:** 피해 발생 / 관련 절차 진행 / 소송중 / 판결 선고 / 종결
+
+### 시리얼라이저
+
+- **AnalysisListSerializer**: 기본 필드 + `article_title`, `article_url`, `source_name`, `published_at` (Article 플래튼), `case_id`, `case_name` (CaseGroup 플래튼), `related_count`
+- **AnalysisDetailSerializer**: 위 + `article` 객체, `case_group` 객체, `related_articles` (같은 사건 그룹 최근 10건)
+- **ArticleListSerializer**: id, title, url, source_name, author, published_at, collected_at, status
+- **ArticleDetailSerializer**: 위 + source 객체, keywords 배열, content 본문
+
+### 유사도 매칭 세부 (find_or_create_case_group)
+
+- 기본: `SequenceMatcher` 문자열 유사도
+- 법률 일반 용어 28개 stopword 제외 (소송, 분쟁, 사건, 피해 등)
+- 핵심 엔티티(2자 이상) 공유 시 보너스 +0.25
+- 3자 이상 엔티티의 부분 문자열 매칭 시 보너스 +0.25
+- 임계값: 0.6 이상이면 기존 그룹에 매칭
+
+### 사건 그룹 매칭 흐름
+
+```
+ LLM 응답의 case_name
+         │
+         ▼
+ 1) 정확 일치하는 CaseGroup 존재?
+         │
+    ┌────┴────┐
+   YES       NO
+    │         │
+    ▼         ▼
+ 기존 그룹   2) 유사도 ≥ 0.6인 CaseGroup 존재?
+ 반환            │
+            ┌───┴───┐
+           YES     NO
+            │       │
+            ▼       ▼
+         기존 그룹  3) 새 CaseGroup 생성
+         반환       CASE-YYYY-NNN
+```
+
+---
+
 ## 변경 이력
 
 | 버전 | 날짜 | 내용 |
 |------|------|------|
+| v2.2 | 2026-02-27 | 기능명세서.md 내용 통합 (모델 상세, config, 크롤러, ERD, 시리얼라이저 등) |
 | v2.1 | 2026-02-24 | 초안 작성 (현재 코드베이스 기반) |
 | v2.0 | - | Gemini로 LLM 교체, 동기 파이프라인 도입, is_relevant 필드 추가 |
 | v1.0 | - | OpenAI GPT-4o, Celery 기반 초기 버전 |
