@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, Legend, LabelList,
 } from 'recharts';
-import { getStats, getAnalyses } from '../lib/api';
+import { getStats, getAnalyses, downloadReport } from '../lib/api';
 import type { DashboardStats, Analysis, SchedulerState } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
 import StageBadge from '../components/StageBadge';
@@ -135,6 +135,16 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<Analysis[]>([]);
+  const [reportLoading, setReportLoading] = useState<'weekly' | 'monthly' | null>(null);
+
+  const handleReport = async (period: 'weekly' | 'monthly') => {
+    setReportLoading(period);
+    try {
+      await downloadReport(period);
+    } finally {
+      setReportLoading(null);
+    }
+  };
 
   useEffect(() => { document.title = 'AI 대시보드 | LawNGood'; }, []);
 
@@ -182,12 +192,28 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-gray-900">AI 분석 대시보드</h1>
           <p className="text-gray-400 text-sm mt-1">법률 뉴스 분석 및 소송적합도 현황</p>
         </div>
-        <Link
-          to="/"
-          className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-2 bg-white transition-colors"
-        >
-          심사 현황으로 →
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleReport('weekly')}
+            disabled={reportLoading !== null}
+            className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {reportLoading === 'weekly' ? '생성 중...' : '📄 주간 리포트'}
+          </button>
+          <button
+            onClick={() => handleReport('monthly')}
+            disabled={reportLoading !== null}
+            className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {reportLoading === 'monthly' ? '생성 중...' : '📄 월간 리포트'}
+          </button>
+          <Link
+            to="/"
+            className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-2 bg-white transition-colors"
+          >
+            심사 현황으로 →
+          </Link>
+        </div>
       </div>
 
       {/* AI 분석 KPI */}

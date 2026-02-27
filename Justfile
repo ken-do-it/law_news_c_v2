@@ -82,6 +82,10 @@ pipeline:
 reanalyze article_id:
     uv run python scripts/reanalyze.py {{article_id}}
 
+[doc("기존 분석의 케이스 그룹 재매칭 (just regroup / just regroup --all / just regroup --dry-run)")]
+regroup *args:
+    {{manage}} regroup_analyses {{args}}
+
 # ============================================================
 #  Celery (Redis 필요)
 # ============================================================

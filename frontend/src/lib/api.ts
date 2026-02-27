@@ -134,3 +134,25 @@ export async function createKeyword(word: string): Promise<void> {
 export async function deleteKeyword(id: number): Promise<void> {
   await api.delete(`/keywords/${id}/`);
 }
+
+export async function downloadReport(period: 'weekly' | 'monthly'): Promise<void> {
+  const { data } = await api.get('/analyses/report/', {
+    params: { period },
+    responseType: 'blob',
+  });
+
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  const filename = period === 'monthly'
+    ? `report_${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}.pdf`
+    : `report_weekly_${dateStr}.pdf`;
+
+  const url = window.URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}

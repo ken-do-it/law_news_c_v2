@@ -66,7 +66,6 @@ DOMAIN_TO_SOURCE = {
     "www.kwnews.co.kr": "강원일보",
     "www.kyeonggi.com": "경기일보",
     "sbsfune.sbs.co.kr": "SBS Biz",
-    "www.hankyung.com": "한국경제",
     "koreajoongangdaily.joins.com": "코리아중앙데일리",
     "www.koreaherald.com": "코리아헤럴드",
     "www.newstapa.org": "뉴스타파",
@@ -154,11 +153,11 @@ def extract_source_from_naver_page(naver_url: str) -> str:
         # 네이버 뉴스 페이지의 언론사명
         press = soup.select_one(".media_end_head_top_logo img")
         if press and press.get("alt"):
-            return press["alt"]
+            return str(press["alt"])
 
         press = soup.select_one("a.media_end_head_top_logo_img img")
         if press and press.get("title"):
-            return press["title"]
+            return str(press["title"])
 
     except Exception:
         pass
@@ -186,7 +185,7 @@ def fetch_article_content(url: str) -> str:
         # fallback: meta description
         meta = soup.find("meta", {"property": "og:description"})
         if meta and meta.get("content"):
-            return meta["content"]
+            return str(meta["content"])
 
         return ""
     except requests.RequestException:

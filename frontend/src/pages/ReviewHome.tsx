@@ -120,6 +120,7 @@ export default function ReviewHome() {
     const params: CaseGroupFilters = {
       ordering: f.unreviewed_first ? 'review_completed,-article_count' : '-article_count',
       page: p,
+      group_by_case: 'true',  // 같은 케이스 ID 중복 제거 (최신 기사 1건만 표시)
     };
     if (f.review_completed !== 'all') params.review_completed = f.review_completed === 'true';
     if (f.accepted !== 'all') params.accepted = f.accepted === 'true';
