@@ -8,3 +8,4 @@
 | [PRIORITY_SORT.md](./PRIORITY_SORT.md) | 피해 규모·피해자 수 기반 우선순위 정렬 |
 | [notion.md](./notion.md) | 기술 문서 (아키텍처·워크플로우) |
 | [CHANGELOG_2026_02_27.md](./CHANGELOG_2026_02_27.md) | 2026-02-27 변경 이력 (프롬프트 강화, 심사 일괄 적용, 403 수정) |
+| [PDF_REPORT.md](./PDF_REPORT.md) | PDF 리포트 기능 (3섹션 구조, 날짜 필터, 텍스트 자르기) |

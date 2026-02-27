@@ -417,7 +417,7 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             Analysis.objects.select_related("article", "article__source", "case_group")
             .filter(
                 suitability__in=["High", "Medium"],
-                review_completed=True,
+                article__published_at__date__gte=date_from,
             )
             .order_by("-analyzed_at")
         )
