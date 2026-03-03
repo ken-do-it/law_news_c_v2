@@ -2,6 +2,7 @@ import { useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getAnalyses, downloadExcel, type AnalysisFilters } from '../lib/api';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { Analysis, PaginatedResponse } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
 import StageBadge from '../components/StageBadge';
@@ -12,6 +13,45 @@ const PAGE_SIZE = 20;
 function formatDate(iso: string): string {
   if (!iso) return '—';
   return iso.slice(0, 10);
+}
+
+// 정렬 가능한 컬럼 헤더
+function SortTh({
+  field,
+  ordering,
+  onSort,
+  children,
+  className,
+}: {
+  field: string;
+  ordering: string;
+  onSort: (field: string) => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  const isDesc = ordering === `-${field}`;
+  const isAsc = ordering === field;
+  const active = isDesc || isAsc;
+
+  return (
+    <th
+      className={`px-3 py-3 text-xs font-semibold tracking-wide cursor-pointer select-none whitespace-nowrap group ${
+        active ? 'text-navy' : 'text-gray-400 hover:text-gray-600'
+      } ${className ?? ''}`}
+      onClick={() => onSort(field)}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {children}
+        <span
+          className={`text-[10px] transition-opacity ${
+            active ? 'opacity-100 text-navy' : 'opacity-20 group-hover:opacity-60'
+          }`}
+        >
+          {isDesc ? '↓' : isAsc ? '↑' : '↕'}
+        </span>
+      </span>
+    </th>
+  );
 }
 
 export default function AnalysisList() {
@@ -27,6 +67,7 @@ export default function AnalysisList() {
     ordering: searchParams.get('ordering') || '-analyzed_at',
     page: Number(searchParams.get('page')) || 1,
     include_irrelevant: searchParams.get('include_irrelevant') || undefined,
+    group_by_case: 'true',
   }), [searchParams]);
 
   const fetchData = useCallback(async () => {
@@ -54,16 +95,27 @@ export default function AnalysisList() {
     setSearchParams(params);
   };
 
+  // 컬럼 헤더 클릭: 현재 내림차순이면 → 오름차순, 그 외 → 내림차순(기본)
+  const toggleSort = (field: string) => {
+    const current = filters.ordering ?? '-analyzed_at';
+    const next = current === `-${field}` ? field : `-${field}`;
+    setFilter('ordering', next);
+  };
+
   const currentPage = Number(searchParams.get('page')) || 1;
   const totalPages = data ? Math.ceil(data.count / PAGE_SIZE) : 0;
   const activeSuitability = searchParams.get('suitability') || 'all';
+  const ordering = filters.ordering ?? '-analyzed_at';
+
+  // 기사 발행일 기준 정렬 활성 여부
+  const pubSortActive = ordering === '-published_at' || ordering === 'published_at';
 
   return (
     <div className="p-6 max-w-[1800px] mx-auto space-y-4">
       <div>
         <h1 className="text-2xl font-bold">분석 목록</h1>
         <p className="text-gray-500 text-sm mt-1">
-          AI가 분석한 개별 기사를 탐색합니다 · 기사 클릭 시 상세 분석 결과 표시
+          AI가 분석한 개별 기사를 탐색합니다 · 기사 클릭 시 상세 분석 결과 표시 · 컬럼 헤더 클릭으로 정렬
         </p>
       </div>
 
@@ -107,19 +159,28 @@ export default function AnalysisList() {
           </div>
         </div>
 
-        {/* 정렬 */}
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">정렬</label>
-          <select
-            className="border rounded px-3 py-1.5 text-sm"
-            value={filters.ordering}
-            onChange={(e) => setFilter('ordering', e.target.value)}
+        {/* 기사 발행일 기준 정렬 — 컬럼이 없는 발행일은 별도 버튼으로 제공 */}
+        <div className="flex items-end">
+          <button
+            onClick={() =>
+              setFilter(
+                'ordering',
+                ordering === '-published_at'
+                  ? 'published_at'   // 내림차순 → 오름차순
+                  : ordering === 'published_at'
+                  ? '-analyzed_at'   // 오름차순 → 초기화
+                  : '-published_at', // 그 외 → 발행일 내림차순 활성화
+              )
+            }
+            className={`px-3 py-1.5 text-xs rounded border transition-colors whitespace-nowrap ${
+              pubSortActive
+                ? 'bg-navy text-white border-navy font-semibold'
+                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+            }`}
           >
-            <option value="-analyzed_at">최신 분석 순</option>
-            <option value="analyzed_at">오래된 분석 순</option>
-            <option value="-published_at">최신 기사 순</option>
-            <option value="suitability">AI 적합도 순</option>
-          </select>
+            기사 발행일 기준
+            {ordering === '-published_at' ? ' ↓' : ordering === 'published_at' ? ' ↑' : ''}
+          </button>
         </div>
 
         {/* 비관련 기사 포함 */}
@@ -161,12 +222,18 @@ export default function AnalysisList() {
               <tr className="border-b text-left bg-gray-50">
                 <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide w-[28%]">기사 제목</th>
                 <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">케이스</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[8%]">AI 적합도</th>
+                <SortTh field="suitability_rank" ordering={ordering} onSort={toggleSort} className="w-[8%]">
+                  AI 적합도
+                </SortTh>
                 <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">사건 유형</th>
                 <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[10%]">진행단계</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[13%]">피해규모</th>
+                <SortTh field="damage_amount_num" ordering={ordering} onSort={toggleSort} className="w-[13%]">
+                  피해규모
+                </SortTh>
                 <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">상대방</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[8%]">분석일</th>
+                <SortTh field="analyzed_at" ordering={ordering} onSort={toggleSort} className="w-[8%]">
+                  분석일
+                </SortTh>
               </tr>
             </thead>
             <tbody>
@@ -174,12 +241,7 @@ export default function AnalysisList() {
                 <TableSkeleton cols={8} rows={12} />
               ) : (
                 <>
-                  {(() => {
-                    const seenCaseIds = new Set<string>();
-                    return (data?.results ?? []).map((a) => {
-                      const isFirstCaseId = !!a.case_id && !seenCaseIds.has(a.case_id);
-                      if (a.case_id) seenCaseIds.add(a.case_id);
-                      return (
+                  {(data?.results ?? []).map((a) => (
                     <tr key={a.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
                       <td className="px-3 py-2.5">
                         <Link
@@ -189,20 +251,24 @@ export default function AnalysisList() {
                         >
                           {a.article_title}
                         </Link>
-                        {a.summary && (
-                          <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{a.summary}</p>
-                        )}
                       </td>
                       <td className="px-3 py-2.5">
-                        {isFirstCaseId ? (
-                          <Link
-                            to={`/analyses/case/${a.case_id}`}
-                            className="font-mono text-xs text-blue-600 hover:underline"
-                          >
-                            {a.case_id}
-                          </Link>
+                        {a.case_id ? (
+                          <div className="flex items-center gap-1">
+                            <Link
+                              to={`/analyses/case/${a.case_id}`}
+                              className="font-mono text-xs text-blue-600 hover:underline"
+                            >
+                              {a.case_id}
+                            </Link>
+                            {a.related_count > 1 && (
+                              <span className="text-[10px] text-gray-400 bg-gray-100 rounded px-1 leading-4">
+                                {a.related_count}건
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-gray-400 text-xs">—</span>
+                          <span className="text-gray-300 text-xs">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5">
@@ -224,9 +290,7 @@ export default function AnalysisList() {
                         {formatDate(a.analyzed_at)}
                       </td>
                     </tr>
-                      );
-                    });
-                  })()}
+                  ))}
                   {!loading && (data?.results ?? []).length === 0 && (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-gray-400">
