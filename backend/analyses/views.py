@@ -498,7 +498,7 @@ class CaseGroupViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, url_path="by_case_id/(?P<case_id>[^/.]+)")
     def by_case_id(self, request, case_id=None):
-        """case_id로 사건 그룹 상세 조회 (GET /api/case-groups/by_case_id/CASE-2026-001/)"""
+        """case_id로 사건 그룹 상세 조회 (GET /api/case-groups/by_case_id/2026-02-001/)"""
         obj = CaseGroup.objects.filter(case_id=case_id).prefetch_related(
             "analyses", "analyses__article", "analyses__article__source"
         ).first()

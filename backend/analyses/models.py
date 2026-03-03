@@ -16,7 +16,7 @@ class CaseGroup(models.Model):
         "케이스 ID",
         max_length=30,
         unique=True,
-        help_text="예: CASE-2026-001",
+        help_text="예: 2026-02-001",
     )
     name = models.CharField("사건명", max_length=200, help_text="예: 쿠팡 개인정보 유출")
     description = models.TextField("사건 설명", blank=True, default="")
@@ -55,9 +55,9 @@ class CaseGroup(models.Model):
         return f"[{self.case_id}] {self.name}"
 
     @classmethod
-    def generate_next_case_id(cls):
-        year = datetime.date.today().year
-        prefix = f"CASE-{year}-"
+    def generate_next_case_id(cls, article_date: datetime.date | None = None):
+        date = article_date or datetime.date.today()
+        prefix = f"{date.year}-{date.month:02d}-"
         last = (
             cls.objects.filter(case_id__startswith=prefix)
             .order_by("-case_id")

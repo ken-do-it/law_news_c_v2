@@ -243,7 +243,7 @@ def _extract_title_keywords(text: str) -> set[str]:
     return {w for w in words if w not in _CASE_STOPWORDS}
 
 
-def find_or_create_case_group(case_name: str, article_title: str = "") -> CaseGroup | None:
+def find_or_create_case_group(case_name: str, article_title: str = "", article_date=None) -> CaseGroup | None:
     """사건명으로 기존 CaseGroup을 찾거나 유사도 매칭 후 새로 생성.
 
     매칭 순서:
@@ -334,7 +334,7 @@ def find_or_create_case_group(case_name: str, article_title: str = "") -> CaseGr
                 return group_obj
 
     # 4) 새 그룹 생성
-    case_id = CaseGroup.generate_next_case_id()
+    case_id = CaseGroup.generate_next_case_id(article_date=article_date)
     return CaseGroup.objects.create(case_id=case_id, name=case_name)
 
 
@@ -399,6 +399,7 @@ def analyze_single_article(article: Article) -> bool:
     case_group = find_or_create_case_group(
         parsed.get("case_name", ""),
         article_title=article.title,
+        article_date=article.published_at.date(),
     )
 
     used_model = settings.GEMINI_MODEL if primary == call_gemini else settings.LLM_MODEL

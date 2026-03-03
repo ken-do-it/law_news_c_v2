@@ -77,7 +77,7 @@ export default function AnalysisList() {
           <input
             key={filters.search ?? 'empty'}
             type="text"
-            placeholder="예: 쿠팡, 손해배상, CASE-2026-001..."
+            placeholder="예: 쿠팡, 손해배상, 2026-02-001..."
             className="border rounded px-3 py-1.5 text-sm w-64 focus:outline-none focus:ring-1 focus:ring-gold"
             defaultValue={filters.search}
             onKeyDown={(e) => {
