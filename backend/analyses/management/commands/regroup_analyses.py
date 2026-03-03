@@ -49,7 +49,6 @@ class Command(BaseCommand):
 
         qs = (
             Analysis.objects.select_related("article", "case_group")
-            .filter(is_relevant=True)
             .order_by("analyzed_at")
         )
         if not regroup_all:
@@ -74,6 +73,7 @@ class Command(BaseCommand):
             new_group = find_or_create_case_group(
                 case_name="",          # 이미 분석된 기사는 case_name 재추출 없이
                 article_title=article.title,   # 제목 키워드 매칭만 사용
+                article_date=article.published_at.date(),
             )
 
             # 변경 없으면 스킵

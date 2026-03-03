@@ -18,6 +18,7 @@ from django.http import HttpResponse
 from django_filters import rest_framework as filters  # django-filter 라이브러리의 DRF 통합
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter as DRFOrderingFilter, SearchFilter
 from rest_framework.response import Response
 
 from .export import export_analyses_to_excel, export_analyses_to_pdf, export_case_groups_to_excel
@@ -30,6 +31,29 @@ from .serializers import (
     CaseGroupReviewSerializer,
     CaseGroupSerializer,
 )
+
+
+# ──────────────────────────────────────────────
+# 커스텀 정렬 필터 — published_at alias 처리
+# ──────────────────────────────────────────────
+class AnalysisOrderingFilter(DRFOrderingFilter):
+    """프론트에서 보내는 published_at을 article__published_at으로 매핑"""
+
+    _ALIAS = {
+        "published_at": "article__published_at",
+        "-published_at": "-article__published_at",
+    }
+
+    def remove_invalid_fields(self, queryset, fields, view, request):
+        resolved, remaining = [], []
+        for f in fields:
+            if f in self._ALIAS:
+                resolved.append(self._ALIAS[f])
+            else:
+                remaining.append(f)
+        if remaining:
+            resolved.extend(super().remove_invalid_fields(queryset, remaining, view, request))
+        return resolved
 
 
 # ──────────────────────────────────────────────
@@ -113,6 +137,7 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     http_method_names = ["get", "patch", "head", "options"]
+    filter_backends = [filters.DjangoFilterBackend, SearchFilter, AnalysisOrderingFilter]
 
     # QuerySet 정의 — select_related로 관련 모델을 JOIN하여 N+1 쿼리 방지
     # article: 기사 정보, article__source: 매체 정보, case_group: 사건 그룹

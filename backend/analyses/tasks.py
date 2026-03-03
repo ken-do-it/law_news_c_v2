@@ -254,7 +254,9 @@ def find_or_create_case_group(case_name: str, article_title: str = "", article_d
       4) 새 그룹 생성
     """
     if not case_name:
-        return None
+        if not article_title:
+            return None
+        case_name = article_title[:80]
 
     # 1) 정확히 일치하는 그룹
     existing = CaseGroup.objects.filter(name=case_name).first()

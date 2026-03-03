@@ -166,9 +166,9 @@ export default function CaseDetail() {
                         {a.article_title}
                       </Link>
                       <p className="text-xs text-gray-500 mt-1 line-clamp-2">{a.summary}</p>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-                        <span>{a.source_name}</span>
-                        <span>{a.published_at?.slice(0, 10)}</span>
+                      <div className="flex items-center gap-2 mt-1.5 text-xs">
+                        <span className="text-gray-400">{a.source_name}</span>
+                        <span className="text-gray-600 font-medium tabular-nums">{a.published_at?.slice(0, 10)}</span>
                         <a
                           href={a.article_url}
                           target="_blank"
@@ -230,6 +230,7 @@ export default function CaseDetail() {
             {selectedAnalysis ? (
               <div className="space-y-3">
                 <DetailItem icon="🎯" label="적합도" value={<SuitabilityBadge value={selectedAnalysis.suitability} />} />
+                <DetailItem icon="📅" label="발행일" value={selectedAnalysis.published_at?.slice(0, 10) || '-'} />
                 <DetailItem icon="📁" label="사건 분야" value={selectedAnalysis.case_category || '-'} />
                 <DetailItem icon="🏢" label="상대방" value={selectedAnalysis.defendant || '-'} />
                 <DetailItem icon="💰" label="피해 규모" value={selectedAnalysis.damage_amount || '미상'} />

@@ -4,6 +4,7 @@ import { getAnalyses, downloadExcel, type AnalysisFilters } from '../lib/api';
 import { useState } from 'react';
 import type { Analysis, PaginatedResponse } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
+import StageBadge from '../components/StageBadge';
 import TableSkeleton from '../components/TableSkeleton';
 
 const PAGE_SIZE = 20;
@@ -23,7 +24,7 @@ export default function AnalysisList() {
   const filters = useMemo<AnalysisFilters>(() => ({
     search: searchParams.get('search') || undefined,
     suitability: searchParams.get('suitability') || undefined,
-    ordering: searchParams.get('ordering') || '-published_at',
+    ordering: searchParams.get('ordering') || '-analyzed_at',
     page: Number(searchParams.get('page')) || 1,
     include_irrelevant: searchParams.get('include_irrelevant') || undefined,
   }), [searchParams]);
@@ -58,7 +59,7 @@ export default function AnalysisList() {
   const activeSuitability = searchParams.get('suitability') || 'all';
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-4">
+    <div className="p-6 max-w-[1800px] mx-auto space-y-4">
       <div>
         <h1 className="text-2xl font-bold">분석 목록</h1>
         <p className="text-gray-500 text-sm mt-1">
@@ -114,9 +115,9 @@ export default function AnalysisList() {
             value={filters.ordering}
             onChange={(e) => setFilter('ordering', e.target.value)}
           >
+            <option value="-analyzed_at">최신 분석 순</option>
+            <option value="analyzed_at">오래된 분석 순</option>
             <option value="-published_at">최신 기사 순</option>
-            <option value="published_at">오래된 기사 순</option>
-            <option value="-analyzed_at">최근 분석 순</option>
             <option value="suitability">AI 적합도 순</option>
           </select>
         </div>
@@ -158,20 +159,27 @@ export default function AnalysisList() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left bg-gray-50">
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide w-[38%]">기사 제목</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[12%]">언론사</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[14%]">케이스</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[10%]">AI 적합도</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[14%]">사건 유형</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[10%]">발행일</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide w-[28%]">기사 제목</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">케이스</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[8%]">AI 적합도</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">사건 유형</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[10%]">진행단계</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[13%]">피해규모</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">상대방</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[8%]">분석일</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <TableSkeleton cols={6} rows={12} />
+                <TableSkeleton cols={8} rows={12} />
               ) : (
                 <>
-                  {(data?.results ?? []).map((a) => (
+                  {(() => {
+                    const seenCaseIds = new Set<string>();
+                    return (data?.results ?? []).map((a) => {
+                      const isFirstCaseId = !!a.case_id && !seenCaseIds.has(a.case_id);
+                      if (a.case_id) seenCaseIds.add(a.case_id);
+                      return (
                     <tr key={a.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
                       <td className="px-3 py-2.5">
                         <Link
@@ -185,11 +193,8 @@ export default function AnalysisList() {
                           <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{a.summary}</p>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">
-                        {a.source_name || '—'}
-                      </td>
                       <td className="px-3 py-2.5">
-                        {a.case_id ? (
+                        {isFirstCaseId ? (
                           <Link
                             to={`/analyses/case/${a.case_id}`}
                             className="font-mono text-xs text-blue-600 hover:underline"
@@ -203,17 +208,28 @@ export default function AnalysisList() {
                       <td className="px-3 py-2.5">
                         <SuitabilityBadge value={a.suitability} />
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[120px] truncate" title={a.case_category}>
+                      <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[100px] truncate" title={a.case_category}>
                         {a.case_category || '—'}
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                        {formatDate(a.published_at)}
+                      <td className="px-3 py-2.5">
+                        {a.stage ? <StageBadge value={a.stage} /> : <span className="text-gray-400 text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[120px] truncate" title={a.damage_amount ?? ''}>
+                        {a.damage_amount || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[100px] truncate" title={a.defendant ?? ''}>
+                        {a.defendant || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap tabular-nums">
+                        {formatDate(a.analyzed_at)}
                       </td>
                     </tr>
-                  ))}
+                      );
+                    });
+                  })()}
                   {!loading && (data?.results ?? []).length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-400">
+                      <td colSpan={8} className="py-12 text-center text-gray-400">
                         분석 결과가 없습니다
                       </td>
                     </tr>
