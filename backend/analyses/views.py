@@ -13,7 +13,7 @@ REST API 엔드포인트를 제공합니다.
 
 from datetime import date, timedelta
 
-from django.db.models import Count, Q, Subquery, OuterRef, Sum
+from django.db.models import Case, Count, IntegerField, Q, Subquery, OuterRef, Sum, Value, When
 from django.http import HttpResponse
 from django_filters import rest_framework as filters  # django-filter 라이브러리의 DRF 통합
 from rest_framework import viewsets
@@ -179,11 +179,19 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         # related_count 어노테이션 (같은 사건 그룹의 다른 기사 수)
+        # suitability_rank 어노테이션 (High=3, Medium=2, Low=1 — 숫자 정렬용)
         qs = qs.annotate(
             related_count=Count(
                 "case_group__analyses",
                 filter=Q(case_group__analyses__is_relevant=True),
-            )
+            ),
+            suitability_rank=Case(
+                When(suitability="High", then=Value(3)),
+                When(suitability="Medium", then=Value(2)),
+                When(suitability="Low", then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
         )
 
         return qs
@@ -203,6 +211,7 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         "analyzed_at",
         "article__published_at",
         "suitability",
+        "suitability_rank",    # High=3, Medium=2, Low=1 순서 정렬 (어노테이션 필드)
         "damage_amount_num",   # 피해 규모 큰 순 정렬
         "victim_count_num",    # 피해자 많은 순 정렬
         "review_completed",    # 미심사 먼저 정렬용
