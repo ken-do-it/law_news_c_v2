@@ -180,6 +180,7 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
 
         # related_count 어노테이션 (같은 사건 그룹의 다른 기사 수)
         # suitability_rank 어노테이션 (High=3, Medium=2, Low=1 — 숫자 정렬용)
+        # case_group_high/medium/low — 케이스 그룹 내 적합도별 기사 수 (N+1 방지 annotate)
         qs = qs.annotate(
             related_count=Count(
                 "case_group__analyses",
@@ -191,6 +192,27 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
                 When(suitability="Low", then=Value(1)),
                 default=Value(0),
                 output_field=IntegerField(),
+            ),
+            case_group_high=Count(
+                "case_group__analyses",
+                filter=Q(
+                    case_group__analyses__suitability="High",
+                    case_group__analyses__is_relevant=True,
+                ),
+            ),
+            case_group_medium=Count(
+                "case_group__analyses",
+                filter=Q(
+                    case_group__analyses__suitability="Medium",
+                    case_group__analyses__is_relevant=True,
+                ),
+            ),
+            case_group_low=Count(
+                "case_group__analyses",
+                filter=Q(
+                    case_group__analyses__suitability="Low",
+                    case_group__analyses__is_relevant=True,
+                ),
             ),
         )
 

@@ -4,6 +4,7 @@ import logging
 import re
 from difflib import SequenceMatcher
 
+from articles.models import Article
 from celery import shared_task
 from django.conf import settings
 from django.db.models import Count, Q
@@ -11,27 +12,82 @@ from django.db.models import Count, Q
 from analyses.models import Analysis, CaseGroup
 from analyses.prompts import build_messages
 from analyses.validators import validate_and_parse
-from articles.models import Article
 
 logger = logging.getLogger(__name__)
 
-# 유사도 매칭 임계값
-CASE_SIMILARITY_THRESHOLD = 0.6
+# 유사도 매칭 임계값 — 낮을수록 다른 사건이 합쳐지는 false positive 증가
+CASE_SIMILARITY_THRESHOLD = 0.85
 
 # 제목 키워드 기반 그룹 매칭 — 공유 키워드 N개 이상이면 같은 사건 그룹으로 판단
-TITLE_KEYWORD_MATCH_COUNT = 3
+# 낮을수록 동일 토픽의 다른 사건이 합쳐질 위험 증가
+TITLE_KEYWORD_MATCH_COUNT = 4
 
 # 사건명에서 자주 등장하는 일반 법률/분류 용어 (유사도 매칭 시 제외)
 _CASE_STOPWORDS = {
-    "소송", "분쟁", "사건", "피해", "소비자", "유출", "논란", "문제",
-    "관련", "사태", "조사", "처리", "대응", "보상", "청구", "재판",
-    "판결", "기소", "수사", "검찰", "경찰", "법원", "소송중",
-    "민원", "접수", "안내", "경고", "주의", "예방", "위반", "혐의",
-    "의혹", "인상", "인하", "확대", "축소", "폭리", "피싱", "스미싱",
+    "소송",
+    "분쟁",
+    "사건",
+    "피해",
+    "소비자",
+    "유출",
+    "논란",
+    "문제",
+    "관련",
+    "사태",
+    "조사",
+    "처리",
+    "대응",
+    "보상",
+    "청구",
+    "재판",
+    "판결",
+    "기소",
+    "수사",
+    "검찰",
+    "경찰",
+    "법원",
+    "소송중",
+    "민원",
+    "접수",
+    "안내",
+    "경고",
+    "주의",
+    "예방",
+    "위반",
+    "혐의",
+    "의혹",
+    "인상",
+    "인하",
+    "확대",
+    "축소",
+    "폭리",
+    "피싱",
+    "스미싱",
     # 기사 제목에서 그룹핑에 의미 없는 추가 단어
-    "기자", "뉴스", "보도", "취재", "단독", "속보", "긴급", "확인",
-    "발표", "주장", "강조", "밝혀", "지적", "제기", "요구", "촉구",
-    "개선", "추진", "계획", "예정", "전망", "분석", "공개", "제도",
+    "기자",
+    "뉴스",
+    "보도",
+    "취재",
+    "단독",
+    "속보",
+    "긴급",
+    "확인",
+    "발표",
+    "주장",
+    "강조",
+    "밝혀",
+    "지적",
+    "제기",
+    "요구",
+    "촉구",
+    "개선",
+    "추진",
+    "계획",
+    "예정",
+    "전망",
+    "분석",
+    "공개",
+    "제도",
 }
 
 
@@ -77,7 +133,7 @@ def parse_damage_amount(text: str) -> int | None:
         # 천 단위 (1천 = 1,000원, 단독으로 쓰인 경우 — 억/조 없을 때)
         m = re.search(r"([\d.]+)\s*천\s*(?:만|원)", t)
         if m:
-            unit = 10_000 if "만" in t[m.end() - 1:m.end() + 1] else 1_000
+            unit = 10_000 if "만" in t[m.end() - 1 : m.end() + 1] else 1_000
             total += int(float(m.group(1)) * unit)
 
         # 만 단위 (1만 = 10,000원)
@@ -199,15 +255,30 @@ def call_gemini(messages: list[dict]) -> tuple[str, int, int]:
 
 
 def get_existing_case_names() -> list[str]:
-    """활성 사건 그룹 이름 목록 조회 (is_relevant=True 기사가 있는 그룹만)"""
+    """활성 사건 그룹 이름 목록 조회.
+
+    범위: is_relevant 기사가 있는 그룹 중 최근 90일 내 기사가 있는 그룹 우선,
+    최대 150개 (LLM 컨텍스트 과부하 방지).
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    cutoff = timezone.now() - timedelta(days=90)
     groups = (
         CaseGroup.objects.annotate(
-            relevant_count=Count(
-                "analyses", filter=Q(analyses__is_relevant=True)
-            )
+            relevant_count=Count("analyses", filter=Q(analyses__is_relevant=True)),
+            recent_count=Count(
+                "analyses",
+                filter=Q(
+                    analyses__is_relevant=True,
+                    analyses__article__published_at__gte=cutoff,
+                ),
+            ),
         )
         .filter(relevant_count__gt=0)
-        .values_list("name", flat=True)
+        .order_by("-recent_count", "-relevant_count")
+        .values_list("name", flat=True)[:150]
     )
     return list(groups)
 
@@ -243,7 +314,9 @@ def _extract_title_keywords(text: str) -> set[str]:
     return {w for w in words if w not in _CASE_STOPWORDS}
 
 
-def find_or_create_case_group(case_name: str, article_title: str = "", article_date=None) -> CaseGroup | None:
+def find_or_create_case_group(
+    case_name: str, article_title: str = "", article_date=None
+) -> CaseGroup | None:
     """사건명으로 기존 CaseGroup을 찾거나 유사도 매칭 후 새로 생성.
 
     매칭 순서:
@@ -289,6 +362,7 @@ def find_or_create_case_group(case_name: str, article_title: str = "", article_d
     #    LLM이 다른 case_name을 부여해도 제목 키워드로 묶어줌
     if article_title and all_groups:
         from datetime import timedelta
+
         from django.utils import timezone
 
         recent_cutoff = timezone.now() - timedelta(days=30)
@@ -296,7 +370,8 @@ def find_or_create_case_group(case_name: str, article_title: str = "", article_d
 
         if len(title_keywords) >= TITLE_KEYWORD_MATCH_COUNT:
             # 그룹별 최근 기사 제목을 한 쿼리로 가져옴
-            from django.db.models import Subquery, OuterRef
+            from django.db.models import OuterRef, Subquery
+
             latest_titles = (
                 Analysis.objects.filter(
                     case_group=OuterRef("pk"),
@@ -330,7 +405,8 @@ def find_or_create_case_group(case_name: str, article_title: str = "", article_d
                     best_kw_match["name"],
                     best_kw_count,
                     ", ".join(
-                        title_keywords & _extract_title_keywords(best_kw_match["latest_title"])
+                        title_keywords
+                        & _extract_title_keywords(best_kw_match["latest_title"])
                     ),
                 )
                 return group_obj
@@ -439,7 +515,9 @@ def analyze_single_article(article: Article) -> bool:
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def analyze_pending_articles(self):
     """분석 대기(pending/analyzing) 상태의 기사를 일괄 분석"""
-    pending = Article.objects.filter(status__in=["pending", "analyzing"]).order_by("collected_at")
+    pending = Article.objects.filter(status__in=["pending", "analyzing"]).order_by(
+        "collected_at"
+    )
     total = pending.count()
     success = 0
     failed = 0

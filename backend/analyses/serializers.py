@@ -97,6 +97,7 @@ class AnalysisListSerializer(serializers.ModelSerializer):
     case_id = serializers.CharField(source="case_group.case_id", default="")
     case_name = serializers.CharField(source="case_group.name", default="")
     related_count = serializers.IntegerField(read_only=True, default=0)
+    suitability_distribution = serializers.SerializerMethodField()
 
     class Meta:
         model = Analysis
@@ -107,6 +108,7 @@ class AnalysisListSerializer(serializers.ModelSerializer):
             "source_name",
             "published_at",
             "suitability",
+            "suitability_distribution",
             "case_category",
             "defendant",
             "damage_amount",
@@ -126,6 +128,22 @@ class AnalysisListSerializer(serializers.ModelSerializer):
 
     def get_source_name(self, obj):
         return obj.article.source.name if obj.article.source else ""
+
+    def get_suitability_distribution(self, obj):
+        """케이스 그룹 내 적합도 분포 (annotate 기반, N+1 없음)"""
+        if not obj.case_group_id:
+            return {obj.suitability: 1}
+        result = {}
+        high = getattr(obj, "case_group_high", 0) or 0
+        medium = getattr(obj, "case_group_medium", 0) or 0
+        low = getattr(obj, "case_group_low", 0) or 0
+        if high > 0:
+            result["High"] = high
+        if medium > 0:
+            result["Medium"] = medium
+        if low > 0:
+            result["Low"] = low
+        return result or {obj.suitability: 1}
 
 
 class RelatedArticleSerializer(serializers.ModelSerializer):
