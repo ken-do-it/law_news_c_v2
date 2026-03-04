@@ -36,6 +36,7 @@ export interface Analysis {
   source_name: string;
   published_at: string;
   suitability: 'High' | 'Medium' | 'Low';
+  suitability_distribution?: Record<string, number>;
   case_category: string;
   defendant: string | null;
   damage_amount: string | null;

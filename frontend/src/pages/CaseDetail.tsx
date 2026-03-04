@@ -186,7 +186,7 @@ export default function CaseDetail() {
           </div>
 
           {/* 선택된 기사 상세 (요약 + 판단 근거) */}
-          {selectedAnalysis && (
+          {selectedAnalysis ? (
             <div className="bg-white rounded-xl border border-border p-6">
               <h2 className="text-sm font-semibold mb-3">📋 기사 상세 — {selectedAnalysis.article?.title?.slice(0, 40)}…</h2>
               <div className="flex items-center gap-2 mb-3">
@@ -214,6 +214,21 @@ export default function CaseDetail() {
                 className="inline-block mt-3 text-xs text-gray-400 hover:text-gray-600"
               >
                 상세 접기
+              </button>
+            </div>
+          ) : caseGroup.analyses.length > 0 && (
+            <div className="bg-white rounded-xl border border-border p-4 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  userCollapsedRef.current = false;
+                  const p = new URLSearchParams(searchParams);
+                  p.set('article', String(caseGroup.analyses[0].id));
+                  setSearchParams(p);
+                }}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                상세 펴기
               </button>
             </div>
           )}

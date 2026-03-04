@@ -74,12 +74,28 @@ WSGI_APPLICATION = "config.wsgi.application"
 # ---------------------------------------------------------------------------
 # Database — SQLite for development
 # ---------------------------------------------------------------------------
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+_db_url = os.getenv("DATABASE_URL", "")
+if _db_url.startswith("postgresql"):
+    import urllib.parse as _up
+    _r = _up.urlparse(_db_url)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": _r.path.lstrip("/"),
+            "USER": _r.username,
+            "PASSWORD": _r.password,
+            "HOST": _r.hostname,
+            "PORT": _r.port or 5432,
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+            "OPTIONS": {"timeout": 30},
+        }
+    }
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -172,4 +188,5 @@ NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")
 # Crawling
 # ---------------------------------------------------------------------------
 CRAWL_INTERVAL_MINUTES = int(os.getenv("CRAWL_INTERVAL_MINUTES", "60"))
+ANALYSIS_INTERVAL_MINUTES = int(os.getenv("ANALYSIS_INTERVAL_MINUTES", "5"))
 NEWS_KEYWORDS = os.getenv("NEWS_KEYWORDS", "소송,손해배상,집단소송,공동소송,피해자,피해보상,피해구제")

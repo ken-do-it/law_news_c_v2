@@ -1,6 +1,6 @@
 # ============================================================
 #  법률 분쟁 사건 자동 발굴 시스템 — Justfile
-#  버전: 1.0.1
+#  버전: 1.1.0  (PostgreSQL + APScheduler 기반)
 # ============================================================
 
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
@@ -18,7 +18,6 @@ default:
 #  서버
 # ============================================================
 
-
 [doc("백엔드 + 프론트엔드 동시 실행")]
 dev:
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}'; uv run python backend/manage.py runserver"
@@ -35,6 +34,28 @@ frontend:
     cd frontend; bun run dev
 
 # ============================================================
+#  PostgreSQL (Docker)
+# ============================================================
+
+[doc("PostgreSQL Docker 컨테이너 시작")]
+pg-start:
+    docker start law-news-postgres 2>$null; if ($LASTEXITCODE -ne 0) { docker run -d --name law-news-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=law_news -p 5432:5432 postgres:16-alpine }
+    Write-Host "  PostgreSQL 실행 중 → localhost:5432 / law_news" -ForegroundColor Green
+
+[doc("PostgreSQL Docker 컨테이너 중지")]
+pg-stop:
+    docker stop law-news-postgres
+    Write-Host "  PostgreSQL 중지됨" -ForegroundColor Yellow
+
+[doc("PostgreSQL 상태 확인")]
+pg-status:
+    docker ps --filter name=law-news-postgres
+
+[doc("psql 접속 (docker exec)")]
+pg-shell:
+    docker exec -it law-news-postgres psql -U postgres -d law_news
+
+# ============================================================
 #  데이터베이스
 # ============================================================
 
@@ -47,12 +68,17 @@ migrate:
 seed:
     {{manage}} seed_initial_data
 
-[doc("DB 초기화: 삭제 → 마이그레이션 → 시드")]
+[doc("DB 전체 초기화: 테이블 삭제 → 마이그레이션 → 시드")]
 db-reset:
-    uv run python scripts/reset_db.py
+    {{manage}} flush --no-input
     {{manage}} migrate
     {{manage}} seed_initial_data
     Write-Host "`n  DB 초기화 완료" -ForegroundColor Green
+
+[doc("분석 결과만 초기화 (기사는 유지, Analysis + CaseGroup 삭제 후 pending 리셋)")]
+db-reset-analyses:
+    {{manage}} shell -c "from analyses.models import Analysis, CaseGroup; Analysis.objects.all().delete(); CaseGroup.objects.all().delete(); from articles.models import Article; Article.objects.update(status='pending'); print('완료: Analysis/CaseGroup 삭제, 기사 pending 리셋')"
+    Write-Host "  분석 초기화 완료. 'just analyze'로 재분석 시작하세요." -ForegroundColor Green
 
 [doc("Django 관리자 계정 생성")]
 superuser:
@@ -66,51 +92,30 @@ dbshell:
 #  뉴스 수집 & AI 분석
 # ============================================================
 
-[doc("뉴스 수집 (Celery 없이 동기 실행)")]
+[doc("뉴스 수집 (동기 실행)")]
 crawl:
-    uv run python scripts/crawl_now.py
+    {{manage}} shell -c "from articles.tasks import crawl_news_sync; n = crawl_news_sync(); print(f'수집 완료: {n}건')"
 
-[doc("대기 중인 기사 AI 분석 (Celery 없이 동기 실행)")]
-analyze:
-    uv run python scripts/analyze_now.py
+[doc("대기 중인 기사 전체 AI 분석 (크롤링 없이, --limit N 으로 건수 제한)")]
+analyze *args:
+    {{manage}} run_analysis {{args}}
 
-[doc("수집 → 분석 전체 파이프라인")]
+[doc("수집 → 분석 전체 파이프라인 (단발 실행)")]
 pipeline:
-    uv run python scripts/pipeline.py
-
-[doc("특정 기사 재분석 (just reanalyze 42)")]
-reanalyze article_id:
-    uv run python scripts/reanalyze.py {{article_id}}
+    {{manage}} shell -c "from articles.tasks import crawl_news_sync; n = crawl_news_sync(); print(f'수집: {n}건')"
+    {{manage}} run_analysis
 
 [doc("기존 분석의 케이스 그룹 재매칭 (just regroup / just regroup --all / just regroup --dry-run)")]
 regroup *args:
     {{manage}} regroup_analyses {{args}}
 
 # ============================================================
-#  Celery (Redis 필요)
-# ============================================================
-
-[doc("Celery 워커 실행")]
-worker:
-    cd backend; uv run celery -A config worker -l info -P solo
-
-[doc("Celery Beat 스케줄러 실행")]
-beat:
-    cd backend; uv run celery -A config beat -l info
-
-[doc("Celery 워커 + Beat 동시 실행")]
-celery:
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}\backend'; uv run celery -A config worker -l info -P solo"
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '{{justfile_directory()}}\backend'; uv run celery -A config beat -l info"
-    Write-Host "`n  Celery Worker + Beat 실행됨" -ForegroundColor Cyan
-
-# ============================================================
 #  모니터링 & 유틸리티
 # ============================================================
 
-[doc("현재 시스템 통계 출력")]
+[doc("현재 DB 통계 출력 (기사 / 분석 / 케이스그룹)")]
 stats:
-    uv run python scripts/show_stats.py
+    {{manage}} shell -c "from articles.models import Article; from analyses.models import Analysis, CaseGroup; print(f'Articles: {Article.objects.count()} (pending={Article.objects.filter(status=\"pending\").count()}, analyzed={Article.objects.filter(status=\"analyzed\").count()})'); print(f'Analyses: {Analysis.objects.count()}'); print(f'CaseGroups: {CaseGroup.objects.count()}')"
 
 [doc("Django 셸")]
 shell:
@@ -135,8 +140,8 @@ install-backend:
 [doc("전체 의존성 설치")]
 install: install-backend install-frontend
 
-[doc("전체 초기 셋업 (의존성 → DB → 시드)")]
-setup: install migrate seed
+[doc("전체 초기 셋업 (PostgreSQL 시작 → 의존성 → DB → 시드)")]
+setup: pg-start install migrate seed
     Write-Host "`n  셋업 완료! 'just dev'로 서버를 시작하세요." -ForegroundColor Green
 
 [doc("의존성 추가 (just add django-extensions)")]
@@ -158,8 +163,3 @@ docs:
 [doc("Django Admin 열기")]
 admin:
     Start-Process "http://localhost:8000/admin/"
-
-[doc("엑셀 내보내기")]
-export:
-    uv run python scripts/export_excel.py
-

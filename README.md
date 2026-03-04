@@ -6,24 +6,23 @@
 
 ## 빠른 시작 가이드 (Quick Start)
 
-> 아래 7단계를 순서대로 따라하면 시스템이 실행됩니다.
+> 아래 단계를 순서대로 따라하면 시스템이 실행됩니다.
 > 예상 소요 시간: **약 10~15분**
 
 ### 사전 준비물
 
-시작하기 전에 아래 3가지가 컴퓨터에 설치되어 있어야 합니다.
+시작하기 전에 아래 4가지가 컴퓨터에 설치되어 있어야 합니다.
 
 | 필요한 것 | 확인 방법 | 없다면 |
 |----------|----------|--------|
-| **Python 3.12+** | 터미널에서 `python --version` | [python.org](https://www.python.org/downloads/) 에서 설치 (설치 시 **"Add to PATH" 반드시 체크**) |
-| **Node.js 18+** | 터미널에서 `node --version` | [nodejs.org](https://nodejs.org/) 에서 LTS 버전 설치 |
-| **Git** | 터미널에서 `git --version` | [git-scm.com](https://git-scm.com/) 에서 설치 |
+| **Python 3.12+** | `python --version` | [python.org](https://www.python.org/downloads/) (설치 시 **"Add to PATH" 체크**) |
+| **Node.js 18+** | `node --version` | [nodejs.org](https://nodejs.org/) LTS 버전 |
+| **Docker Desktop** | `docker --version` | [docker.com](https://www.docker.com/products/docker-desktop/) (PostgreSQL 실행용) |
+| **Git** | `git --version` | [git-scm.com](https://git-scm.com/) |
 
 ---
 
 ### STEP 1. 프로젝트 다운로드
-
-터미널(PowerShell)을 열고 아래 명령어를 순서대로 입력합니다.
 
 ```powershell
 git clone https://github.com/ken-do-it/law_news_c_v2.git
@@ -34,16 +33,14 @@ cd law_news_c_v2
 
 ### STEP 2. 도구 설치
 
-이 프로젝트는 `uv`(Python 패키지 매니저)와 `bun`(Node.js 패키지 매니저)과 `just`(명령어 도구)를 사용합니다.
-
 ```powershell
-# Python 패키지 매니저 설치
+# Python 패키지 매니저 (uv)
 pip install uv
 
-# Node.js 패키지 매니저 설치
+# Node.js 패키지 매니저 (bun)
 npm install -g bun
 
-# 명령어 도구 설치 (Windows)
+# 명령어 도구 (just)
 winget install Casey.Just
 ```
 
@@ -55,15 +52,14 @@ winget install Casey.Just
 uv --version    # 예: uv 0.6.x
 bun --version   # 예: 1.x.x
 just --version  # 예: just 1.x.x
+docker --version  # 예: Docker version 27.x.x
 ```
 
 ---
 
 ### STEP 3. 환경변수 설정 (API 키 입력)
 
-프로젝트 폴더에 `.env` 파일이 있습니다. 이 파일에 API 키를 입력해야 합니다.
-
-`.env` 파일을 메모장이나 VS Code로 열고, 아래 항목을 본인의 키로 변경하세요:
+프로젝트 폴더에 `.env` 파일을 열고 아래 항목을 입력하세요:
 
 ```
 # 네이버 뉴스 검색 API (필수 — 뉴스 수집용)
@@ -92,23 +88,20 @@ just setup
 이 명령어 하나로 아래가 **자동으로** 실행됩니다:
 
 ```
+✅ PostgreSQL Docker 컨테이너 시작 (law-news-postgres)
 ✅ Python 패키지 설치 (Django, AI 라이브러리 등)
 ✅ Node.js 패키지 설치 (React, Tailwind 등)
 ✅ 데이터베이스 테이블 생성
-✅ 초기 데이터 입력 (80개 언론사 + 7개 검색 키워드)
+✅ 초기 데이터 입력 (95개 언론사 + 7개 검색 키워드)
 ```
 
 ---
 
 ### STEP 5. 관리자 계정 만들기
 
-Django 관리자 페이지에 접속하려면 계정이 필요합니다.
-
 ```powershell
 just superuser
 ```
-
-아이디, 이메일, 비밀번호를 차례로 입력하세요.
 
 ---
 
@@ -118,8 +111,7 @@ just superuser
 just dev
 ```
 
-이 명령어로 **백엔드 + 프론트엔드**가 동시에 실행됩니다.
-새 창이 2개 열리며, 아래 주소로 접속할 수 있습니다:
+새 창이 2개 열리며 아래 주소로 접속 가능합니다:
 
 | 서비스 | 주소 | 설명 |
 |--------|------|------|
@@ -127,28 +119,25 @@ just dev
 | **Django 관리자** | http://localhost:8000/admin/ | DB 직접 관리 |
 | **API 문서** | http://localhost:8000/api/docs/ | Swagger API 문서 |
 
+> **자동 실행**: 서버가 시작되면 APScheduler가 **수집(60분)** 과 **분석(5분)** 을 자동으로 반복합니다.
+
 ---
 
-### STEP 7. 뉴스 수집 + AI 분석
-
-서버가 실행 중인 상태에서, **새 터미널을 하나 더 열고** 아래를 실행합니다:
+### STEP 7. 수동 수집 + AI 분석 (초기 데이터 구축 시)
 
 ```powershell
-# 방법 1: 수집과 분석을 한 번에
+# 수집과 분석을 한 번에
 just pipeline
 
-# 방법 2: 따로따로 실행
-just crawl      # 뉴스 수집만 (약 1~2분)
-just analyze    # AI 분석만 (기사당 약 4초)
+# 또는 따로 실행
+just crawl      # 뉴스 수집만
+just analyze    # AI 분석만 (pending 기사 전체)
+just analyze --limit 100  # 100건만 분석
 ```
-
-완료되면 대시보드( http://localhost:5173 )에서 결과를 확인할 수 있습니다.
 
 ---
 
 ## 주요 명령어 모음
-
-터미널에서 `just` 뒤에 명령어를 입력하면 됩니다.
 
 ### 서버
 
@@ -158,16 +147,25 @@ just analyze    # AI 분석만 (기사당 약 4초)
 | `just backend` | 백엔드만 실행 |
 | `just frontend` | 프론트엔드만 실행 |
 
+### PostgreSQL (Docker)
+
+| 명령어 | 설명 |
+|--------|------|
+| `just pg-start` | PostgreSQL 컨테이너 시작 |
+| `just pg-stop` | PostgreSQL 컨테이너 중지 |
+| `just pg-status` | 컨테이너 상태 확인 |
+| `just pg-shell` | psql 접속 |
+
 ### 뉴스 수집 & AI 분석
 
 | 명령어 | 설명 |
 |--------|------|
 | `just crawl` | 뉴스 수집 (7개 키워드 × 100건) |
-| `just analyze` | 대기 중인 기사 AI 분석 |
+| `just analyze` | 대기 중인 기사 전체 AI 분석 |
+| `just analyze --limit N` | N건만 분석 |
 | `just pipeline` | 수집 → 분석 한 번에 실행 |
-| `just reanalyze 42` | 특정 기사(ID=42) 재분석 |
-| `just stats` | 현재 시스템 통계 출력 |
-| `just export` | 엑셀 파일 내보내기 |
+| `just regroup` | 기존 분석 케이스 그룹 재매칭 |
+| `just stats` | 현재 DB 통계 출력 |
 
 ### 데이터베이스
 
@@ -175,36 +173,30 @@ just analyze    # AI 분석만 (기사당 약 4초)
 |--------|------|
 | `just migrate` | DB 마이그레이션 적용 |
 | `just seed` | 초기 데이터 입력 |
-| `just db-reset` | DB 초기화 (삭제 → 재생성) |
+| `just db-reset` | DB 전체 초기화 |
+| `just db-reset-analyses` | 분석 결과만 초기화 (기사 유지) |
 | `just superuser` | 관리자 계정 생성 |
 
 ### 설치 & 설정
 
 | 명령어 | 설명 |
 |--------|------|
-| `just setup` | 전체 초기 셋업 |
+| `just setup` | 전체 초기 셋업 (PG + 의존성 + DB + 시드) |
 | `just install` | 의존성 설치 (백엔드 + 프론트엔드) |
 | `just admin` | Django 관리자 페이지 열기 |
 | `just docs` | API 문서 (Swagger) 열기 |
-
-전체 명령어 목록 보기:
-
-```powershell
-just
-```
 
 ---
 
 ## 일일 운영 순서
 
-시스템 설치가 완료된 후, 매일 이렇게 사용합니다:
-
 ```
-1. just dev          ← 서버 실행 (이미 실행 중이면 생략)
-2. just pipeline     ← 뉴스 수집 + AI 분석 (새 터미널에서)
+1. just pg-start     ← PostgreSQL 시작 (Docker Desktop 실행 필요)
+2. just dev          ← 서버 실행 (이미 실행 중이면 생략)
+   → APScheduler가 자동으로 수집(60분) + 분석(5분) 반복
 3. 브라우저에서 대시보드 확인  ← http://localhost:5173
 4. "High" 사건 확인   ← 분석 목록에서 적합도 필터링
-5. 엑셀 다운로드 (필요 시)
+5. 엑셀 다운로드 (필요 시)  ← 분석 목록 우측 상단 버튼
 ```
 
 ---
@@ -214,7 +206,8 @@ just
 | 증상 | 해결 |
 |------|------|
 | `just` 명령어 인식 안 됨 | `winget install Casey.Just` 후 터미널 재시작 |
-| 서버가 안 켜짐 | `just install` → `just migrate` 순서로 실행 |
+| 서버가 안 켜짐 | `just pg-start` → `just install` → `just migrate` |
+| PostgreSQL 연결 실패 | Docker Desktop 실행 확인 → `just pg-start` |
 | 크롤링 0건 수집 | `.env`의 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` 확인 |
 | AI 분석 실패 | `.env`의 `GEMINI_API_KEY` 확인 후 `just analyze` 재실행 |
 | 포트 충돌 | Vite가 자동으로 다음 포트 선택 — 터미널에 표시된 URL 확인 |
@@ -229,7 +222,8 @@ just
 | AI | Google Gemini 2.5 Flash (기본), OpenAI GPT-4o (폴백) |
 | 프론트엔드 | React 19, TypeScript, Vite 7, Tailwind CSS 4 |
 | 차트 | Recharts 3 |
-| DB | SQLite (개발) |
+| DB | PostgreSQL 16 (Docker) |
+| 스케줄링 | APScheduler (수집 60분 / 분석 5분 주기) |
 | 도구 | uv, bun, just |
 
 ---
@@ -245,9 +239,9 @@ just
 2. [전체 아키텍처](#2-전체-아키텍처)
 3. [기술 스택](#3-기술-스택)
 4. [프로젝트 폴더 구조](#4-프로젝트-폴더-구조)
-5. [환경 준비 (Python, Node.js 설치)](#5-환경-준비)
+5. [환경 준비](#5-환경-준비)
 6. [프로젝트 설치 및 실행](#6-프로젝트-설치-및-실행)
-7. [데이터 파이프라인 (크롤링 → 분석)](#7-데이터-파이프라인)
+7. [데이터 파이프라인](#7-데이터-파이프라인)
 8. [AI 분석 프롬프트 상세](#8-ai-분석-프롬프트-상세)
 9. [데이터베이스 모델(ERD)](#9-데이터베이스-모델)
 10. [REST API 명세](#10-rest-api-명세)
@@ -273,8 +267,8 @@ just
 
 | 단계 | 사람이 하던 일 | 시스템이 대신 하는 일 |
 |------|-------------|-------------------|
-| 1단계 | 매일 뉴스를 검색하여 법률 관련 기사를 찾음 | 네이버 뉴스 API로 7개 키워드 자동 크롤링 |
-| 2단계 | 기사를 읽고 투자 적합 여부를 판단 | AI가 6가지 기준(C1~C6)으로 자동 판정 |
+| 1단계 | 매일 뉴스를 검색하여 법률 관련 기사를 찾음 | 네이버 뉴스 API로 7개 키워드 자동 크롤링 (60분 주기) |
+| 2단계 | 기사를 읽고 투자 적합 여부를 판단 | AI가 6가지 기준(C1~C6)으로 자동 판정 (5분 주기) |
 | 3단계 | 유사한 사건끼리 분류·정리 | AI가 자동으로 사건 그룹(Case ID) 생성 |
 | 4단계 | 엑셀로 보고서 작성 | 대시보드 + 엑셀 자동 내보내기 |
 
@@ -295,11 +289,11 @@ just
 │                    프론트엔드 (Vite + React)                         │
 │                                                                     │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────┐  ┌────────┐         │
-│  │ 대시보드  │  │ 분석목록  │  │  분석 상세    │  │  설정   │         │
+│  │ 대시보드  │  │ 분석목록  │  │  케이스 상세  │  │  설정   │         │
 │  │ (차트)   │  │ (테이블)  │  │  (AI 요약)   │  │(키워드) │         │
 │  └──────────┘  └──────────┘  └──────────────┘  └────────┘         │
 │                                                                     │
-│  Vite 개발서버가 /api/* 요청을 백엔드로 프록시 (proxy)                │
+│  Vite 개발서버가 /api/* 요청을 백엔드로 프록시                         │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │ /api/*
                            ▼
@@ -307,16 +301,16 @@ just
 │                   백엔드 (Django REST Framework)                     │
 │                     http://localhost:8000                            │
 │                                                                     │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────┐                 │
-│  │ articles 앱 │  │ analyses 앱  │  │ config     │                 │
-│  │ (크롤링)    │  │ (AI 분석)    │  │ (설정)     │                 │
-│  └──────┬──────┘  └──────┬───────┘  └────────────┘                 │
-│         │                │                                          │
-│         ▼                ▼                                          │
-│  ┌─────────────────────────────┐                                    │
-│  │       SQLite 데이터베이스    │                                    │
-│  │       (backend/db.sqlite3)  │                                    │
-│  └─────────────────────────────┘                                    │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────────┐    │
+│  │ articles 앱 │  │ analyses 앱  │  │ scheduler 앱            │    │
+│  │ (크롤링)    │  │ (AI 분석)    │  │ APScheduler             │    │
+│  └──────┬──────┘  └──────┬───────┘  │ ├ crawl  (60분 주기)    │    │
+│         │                │          │ └ analyze (5분 주기)    │    │
+│         ▼                ▼          └─────────────────────────┘    │
+│  ┌──────────────────────────────────────┐                          │
+│  │  PostgreSQL 16 (Docker)              │                          │
+│  │  localhost:5432 / law_news           │                          │
+│  └──────────────────────────────────────┘                          │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
               ┌────────────┴────────────┐
@@ -332,9 +326,8 @@ just
 ### 데이터 흐름 상세
 
 ```
- ① 크롤링                  ② AI 분석                    ③ 결과 제공
- ──────────                ──────────                   ──────────
-
+ ① 크롤링 (60분)           ② AI 분석 (5분)              ③ 결과 제공
+ ──────────────            ──────────────               ──────────
  네이버 뉴스 API            Gemini API                   REST API
       │                        │                            │
       ▼                        ▼                            ▼
@@ -359,13 +352,13 @@ just
 | Django REST Framework | 3.14+ | REST API 구축 |
 | django-filter | 23.5+ | API 필터링 |
 | drf-spectacular | 0.27+ | Swagger API 문서 자동 생성 |
+| APScheduler | 3.x | 수집/분석 자동 스케줄링 (60분/5분) |
 | google-genai | 1.64+ | Gemini LLM 호출 (기본) |
 | OpenAI SDK | 1.0+ | GPT-4o LLM 호출 (폴백) |
 | requests | 2.31+ | 네이버 API HTTP 호출 |
 | BeautifulSoup4 | 4.12+ | HTML 파싱 (기사 본문 추출) |
 | openpyxl | 3.1+ | 엑셀 파일 생성 |
-| Celery | 5.3+ | 비동기 태스크 큐 (선택사항) |
-| SQLite | 내장 | 개발용 데이터베이스 |
+| psycopg | 3.x | PostgreSQL 드라이버 |
 
 ### 프론트엔드
 
@@ -379,6 +372,16 @@ just
 | Axios | 1.x | HTTP 클라이언트 |
 | React Router | 7.x | 클라이언트 라우팅 |
 
+### 인프라
+
+| 기술 | 역할 |
+|------|------|
+| PostgreSQL 16 (Docker) | 운영 데이터베이스 |
+| Docker Desktop | PostgreSQL 컨테이너 실행 |
+| uv | Python 패키지 관리 |
+| bun | Node.js 패키지 관리 |
+| just | 태스크 러너 (Makefile 대체) |
+
 ---
 
 ## 4. 프로젝트 폴더 구조
@@ -387,138 +390,97 @@ just
 law_news_c_v2/                    ← 프로젝트 루트
 │
 ├── .env                          ← 환경변수 (API 키) — git 미추적
-├── .env.example                  ← 환경변수 템플릿
 ├── Justfile                      ← 명령어 정의 (just xxx)
-├── pyproject.toml                ← Python 패키지 목록
-├── docs/                         ← 문서 (docs/README.md에 목차)
-│   ├── FUNCTIONAL_SPEC.md        ← 기능 명세서 (통합, API·DB·프론트 상세)
-│   ├── PRD.md                    ← 제품 요구사항 문서
-│   ├── DASHBOARD_REALTIME.md     ← 대시보드 실시간 갱신·스케줄링 구현
-│   ├── PRIORITY_SORT.md          ← 피해 규모·피해자 수 기반 우선순위 정렬
-│   └── notion.md                 ← 기술 문서 (아키텍처·워크플로우)
+├── pyproject.toml                ← Python 패키지 목록 (uv 관리)
 ├── README.md                     ← 이 문서
 │
 ├── backend/                      ← Django 백엔드
-│   ├── manage.py                 ← Django CLI 진입점
-│   ├── db.sqlite3                ← SQLite DB — git 미추적
+│   ├── manage.py
 │   │
 │   ├── config/                   ← Django 프로젝트 설정
-│   │   ├── settings.py           ← 전체 설정 (DB, API키, CORS 등)
-│   │   ├── urls.py               ← URL 라우팅 (api/, admin/, docs/)
-│   │   ├── celery.py             ← Celery 설정
-│   │   └── __init__.py           ← Celery 앱 자동 로드
+│   │   ├── settings.py           ← 전체 설정 (DB, API키, CORS, 스케줄 주기 등)
+│   │   └── urls.py               ← URL 라우팅
 │   │
 │   ├── articles/                 ← 뉴스 기사 앱 (수집 담당)
 │   │   ├── models.py             ← 모델: MediaSource, Keyword, Article
 │   │   ├── crawlers.py           ← 네이버 뉴스 API 크롤러
-│   │   ├── tasks.py              ← 크롤링 Celery 태스크
-│   │   ├── serializers.py        ← DRF 시리얼라이저
-│   │   ├── views.py              ← API 뷰셋
-│   │   ├── urls.py               ← 라우터 등록
-│   │   ├── admin.py              ← Django 관리자 페이지
+│   │   ├── tasks.py              ← crawl_news_sync() 함수
+│   │   ├── serializers.py
+│   │   ├── views.py
 │   │   └── management/commands/
-│   │       └── seed_initial_data.py  ← 초기 데이터 (80개 언론사 + 7개 키워드)
+│   │       └── seed_initial_data.py
 │   │
-│   └── analyses/                 ← AI 분석 앱
-│       ├── models.py             ← 모델: CaseGroup, Analysis
-│       ├── prompts.py            ← LLM 프롬프트 + Few-shot 예시
-│       ├── validators.py         ← LLM 응답 JSON 검증
-│       ├── tasks.py              ← 분석 태스크 (Gemini + OpenAI 폴백)
-│       ├── export.py             ← 엑셀 내보내기
-│       ├── serializers.py        ← DRF 시리얼라이저
-│       ├── views.py              ← API 뷰셋 (통계, 필터, 엑셀)
-│       ├── urls.py               ← 라우터 등록
-│       └── admin.py              ← Django 관리자 페이지
-│
-├── frontend/                     ← React 프론트엔드
-│   ├── package.json              ← Node.js 패키지 목록
-│   ├── vite.config.ts            ← Vite 설정 (프록시 포함)
-│   ├── tsconfig.json             ← TypeScript 설정
-│   ├── index.html                ← HTML 진입점
+│   ├── analyses/                 ← AI 분석 앱
+│   │   ├── models.py             ← 모델: CaseGroup, Analysis
+│   │   ├── prompts.py            ← LLM 프롬프트 + Few-shot 예시
+│   │   ├── validators.py         ← LLM 응답 JSON 검증
+│   │   ├── tasks.py              ← analyze_single_article() + Case 그룹핑 로직
+│   │   ├── export.py             ← 엑셀 내보내기
+│   │   ├── serializers.py
+│   │   ├── views.py
+│   │   └── management/commands/
+│   │       ├── run_analysis.py   ← just analyze (bulk 재분석)
+│   │       └── regroup_analyses.py
 │   │
-│   └── src/
-│       ├── main.tsx              ← React 앱 마운트
-│       ├── App.tsx               ← 라우팅 (4개 페이지)
-│       ├── index.css             ← Tailwind + 커스텀 테마 색상
-│       │
-│       ├── lib/
-│       │   ├── types.ts          ← TypeScript 인터페이스 정의
-│       │   └── api.ts            ← Axios API 클라이언트
-│       │
-│       ├── components/
-│       │   ├── TopNav.tsx        ← 상단 내비게이션 바
-│       │   ├── StatsCard.tsx     ← 통계 카드 컴포넌트
-│       │   ├── SuitabilityBadge.tsx  ← 적합도 뱃지 (High/Medium/Low)
-│       │   └── StageBadge.tsx    ← 소송 단계 뱃지
-│       │
-│       └── pages/
-│           ├── Dashboard.tsx     ← 대시보드 (차트 + 통계)
-│           ├── AnalysisList.tsx  ← 분석 목록 (필터 + 테이블)
-│           ├── AnalysisDetail.tsx ← 분석 상세 (AI 요약 + 가이드라인)
-│           └── Settings.tsx      ← 설정 (키워드 관리)
+│   └── scheduler/                ← APScheduler 앱
+│       ├── apps.py               ← Django 앱 시작 시 스케줄러 자동 시작
+│       └── scheduler.py          ← crawl(60분) + analyze(5분) 두 개 독립 잡
 │
-└── scripts/                      ← 유틸리티 스크립트
-    ├── crawl_now.py              ← 뉴스 수집 (just crawl)
-    ├── analyze_now.py            ← AI 분석 (just analyze)
-    ├── pipeline.py               ← 전체 파이프라인 (just pipeline)
-    ├── export_excel.py           ← 엑셀 내보내기 (just export)
-    ├── show_stats.py             ← 통계 출력 (just stats)
-    └── reset_db.py               ← DB 초기화 (just db-reset)
+└── frontend/                     ← React 프론트엔드
+    ├── package.json
+    ├── vite.config.ts            ← Vite 설정 (프록시 포함)
+    └── src/
+        ├── lib/
+        │   ├── types.ts          ← TypeScript 인터페이스
+        │   └── api.ts            ← Axios API 클라이언트
+        ├── components/
+        │   ├── SuitabilityBadge.tsx
+        │   ├── AiSuitabilityDisplay.tsx  ← 케이스 적합도 분포 표시
+        │   ├── StageBadge.tsx
+        │   └── ...
+        └── pages/
+            ├── Dashboard.tsx
+            ├── AnalysisList.tsx  ← 분석 목록 (케이스 단위 뷰)
+            ├── CaseDetail.tsx    ← 케이스 상세 + 심사 기능
+            ├── AnalysisDetail.tsx
+            └── Settings.tsx
 ```
 
 ---
 
 ## 5. 환경 준비
 
-### 5-1. Python 설치
-
-**Python 3.12 이상**이 필요합니다.
+### 5-1. Python 3.12+ 설치
 
 ```bash
-# 버전 확인
-python --version
-# 출력: Python 3.12.x
+python --version  # Python 3.12.x
 ```
 
-> 아직 설치하지 않았다면: https://www.python.org/downloads/
->
-> **Windows 설치 시 주의**: 설치 화면에서 `Add Python to PATH` 체크박스를 반드시 체크하세요.
+> [python.org](https://www.python.org/downloads/) — 설치 시 `Add Python to PATH` 체크 필수
 
-### 5-2. uv 설치 (Python 패키지 매니저)
+### 5-2. Docker Desktop 설치
 
-이 프로젝트는 `pip` 대신 더 빠른 `uv`를 사용합니다.
+PostgreSQL을 Docker로 실행합니다.
 
 ```bash
-# uv 설치
-pip install uv
+docker --version  # Docker version 27.x.x
+```
 
-# 확인
+> [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
+
+### 5-3. uv 설치
+
+```bash
+pip install uv
 uv --version
 ```
 
-### 5-3. Node.js 설치
-
-**Node.js 18 이상**이 필요합니다.
-
-```bash
-# 버전 확인
-node --version
-# 출력: v18.x.x 이상
-
-npm --version
-# 출력: 9.x.x 이상
-```
-
-> 아직 설치하지 않았다면: https://nodejs.org/
-
 ### 5-4. API 키 준비
-
-시스템이 작동하려면 2개의 API 키가 필요합니다:
 
 | API | 용도 | 발급처 |
 |-----|------|--------|
-| 네이버 검색 API | 뉴스 기사 수집 | [네이버 개발자센터](https://developers.naver.com/apps/) |
-| Gemini API | AI 분석 (기본 LLM) | [Google AI Studio](https://aistudio.google.com/apikey) |
+| 네이버 검색 API | 뉴스 기사 수집 | [developers.naver.com](https://developers.naver.com/apps/) |
+| Gemini API | AI 분석 (기본 LLM) | [aistudio.google.com](https://aistudio.google.com/apikey) |
 
 > OpenAI API 키는 선택사항입니다 (Gemini 실패 시 폴백용).
 
@@ -529,24 +491,21 @@ npm --version
 ### 6-1. 저장소 클론
 
 ```bash
-git clone <저장소 URL>
+git clone https://github.com/ken-do-it/law_news_c_v2.git
 cd law_news_c_v2
 ```
 
 ### 6-2. 환경변수 설정
 
-```bash
-# 템플릿 복사
-cp .env.example .env
+`.env` 파일에 API 키 입력:
 
-# .env 파일을 열어서 실제 API 키 입력
-# 아래 항목들을 본인의 키로 변경:
-#   NAVER_CLIENT_ID=발급받은_클라이언트_ID
-#   NAVER_CLIENT_SECRET=발급받은_시크릿
-#   GEMINI_API_KEY=발급받은_키
+```env
+NAVER_CLIENT_ID=발급받은_클라이언트_ID
+NAVER_CLIENT_SECRET=발급받은_시크릿
+GEMINI_API_KEY=발급받은_키
 ```
 
-### 6-3. 전체 설치 (just 사용)
+### 6-3. 전체 설치
 
 ```powershell
 just setup
@@ -555,204 +514,91 @@ just setup
 ### 6-4. 수동 설치 (just 없이)
 
 ```bash
-# 1) 백엔드 패키지 설치
+# 1) PostgreSQL 컨테이너 시작
+docker run -d --name law-news-postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=law_news \
+  -p 5432:5432 postgres:16-alpine
+
+# 2) 백엔드 패키지 설치
 uv sync
 
-# 2) 프론트엔드 패키지 설치
+# 3) 프론트엔드 패키지 설치
 cd frontend && bun install && cd ..
 
-# 3) 데이터베이스 초기화
+# 4) 데이터베이스 초기화
 uv run python backend/manage.py migrate
 
-# 4) 초기 데이터 입력
+# 5) 초기 데이터 입력
 uv run python backend/manage.py seed_initial_data
-
-# 5) 관리자 계정 생성
-uv run python backend/manage.py createsuperuser
 ```
 
 ### 6-5. 서버 실행
 
 ```powershell
-# just 사용 (권장)
 just dev
-
-# 또는 수동 실행 (터미널 2개 필요)
-# 터미널 1: 백엔드
-uv run python backend/manage.py runserver
-
-# 터미널 2: 프론트엔드
-cd frontend && bun run dev
+# → 백엔드 http://localhost:8000
+# → 프론트엔드 http://localhost:5173
+# → APScheduler: 수집(60분) + 분석(5분) 자동 시작
 ```
-
-### 6-6. 접속 확인
-
-| 서비스 | URL | 설명 |
-|--------|-----|------|
-| 프론트엔드 | http://localhost:5173 | 대시보드 메인 화면 |
-| 백엔드 API | http://localhost:8000/api/ | REST API 루트 |
-| Swagger 문서 | http://localhost:8000/api/docs/ | API 자동 문서 |
-| Django 관리자 | http://localhost:8000/admin/ | DB 관리 페이지 |
-
-### 6-7. 크롤링 + AI 분석 실행
-
-```powershell
-# 수집 → 분석 한 번에 (권장)
-just pipeline
-
-# 또는 따로따로
-just crawl      # 뉴스 수집
-just analyze    # AI 분석
-```
-
-> **참고**: AI 분석은 기사당 약 4초 소요됩니다. 600건 기준 약 40분 소요됩니다.
 
 ---
 
 ## 7. 데이터 파이프라인
 
-### 전체 파이프라인 흐름도
+### 자동 스케줄링
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                        STEP 1: 크롤링                            │
-│                                                                  │
-│  키워드 7개 순회:                                                 │
-│  소송, 손해배상, 집단소송, 공동소송, 피해자, 피해보상, 피해구제       │
-│                                                                  │
-│  각 키워드마다:                                                    │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐      │
-│  │ 네이버 API    │ ──▶ │ URL 중복검사  │ ──▶ │ 본문 스크래핑 │      │
-│  │ 100건 검색    │     │ (DB 대조)    │     │ (HTML→텍스트) │      │
-│  └──────────────┘     └──────────────┘     └──────┬───────┘      │
-│                                                    │              │
-│                                      ┌─────────────▼────────┐    │
-│                                      │ Article 테이블 저장    │    │
-│                                      │ status = "pending"   │    │
-│                                      └──────────────────────┘    │
-└──────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                       STEP 2: AI 분석                            │
-│                                                                  │
-│  pending 상태의 기사를 하나씩 처리:                                 │
-│                                                                  │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐      │
-│  │ 프롬프트 구성  │ ──▶ │ Gemini 호출   │ ──▶ │ JSON 응답    │      │
-│  │ (시스템 프롬프 │     │  (실패 시     │     │  파싱/검증   │      │
-│  │  트 + Few-shot│     │   OpenAI)    │     │              │      │
-│  │  + 기사 본문) │     │              │     │              │      │
-│  └──────────────┘     └──────────────┘     └──────┬───────┘      │
-│                                                    │              │
-│                    ┌───────────────────────────────┘              │
-│                    ▼                                              │
-│  ┌──────────────────────────────────────────────────────┐        │
-│  │ Analysis 테이블 저장                                   │        │
-│  │ - suitability: High / Medium / Low                   │        │
-│  │ - case_category: 개인정보, 형사, 특허, 금융 등          │        │
-│  │ - defendant: 상대방 (기업명/기관명)                     │        │
-│  │ - case_name → CaseGroup 자동 생성/매칭                 │        │
-│  │ - Article.status → "analyzed"                        │        │
-│  └──────────────────────────────────────────────────────┘        │
-└──────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                     STEP 3: 결과 활용                             │
-│                                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────┐    │
-│  │ 대시보드  │  │ 분석 목록 │  │  상세 보기    │  │ 엑셀     │    │
-│  │ 통계/차트 │  │ 필터/검색 │  │  AI 분석 보기 │  │ 다운로드  │    │
-│  └──────────┘  └──────────┘  └──────────────┘  └──────────┘    │
-└──────────────────────────────────────────────────────────────────┘
+Django 서버 시작
+      │
+      ├─ 10초 후 → crawl 잡 첫 실행 → 이후 60분마다 반복
+      └─ 15초 후 → analyze 잡 첫 실행 → 이후 5분마다 반복
 ```
 
-### 크롤링 상세 프로세스
+두 잡은 독립적으로 실행됩니다. 분석 잡이 실행 중이어도 수집 잡은 정상 동작합니다.
+
+### 크롤링 프로세스
 
 ```
-네이버 뉴스 검색 API 호출
-          │
-          ▼
-    검색 결과 (JSON)
-    ├── title (HTML 태그 포함)
-    ├── link (네이버 뉴스 URL)
-    ├── originallink (원본 기사 URL)
-    ├── description (요약)
-    └── pubDate (발행일)
-          │
-          ▼
-    ┌─────────────────────────────────┐
-    │ URL 중복 체크                    │
-    │ DB에 이미 같은 URL이 있으면 SKIP  │
-    └──────────────┬──────────────────┘
-                   │ 새 기사만 진행
-                   ▼
-    ┌─────────────────────────────────┐
-    │ 언론사 식별                      │
-    │ 1순위: URL 도메인 매핑 (60+개)    │
-    │ 2순위: 네이버 페이지 스크래핑      │
-    └──────────────┬──────────────────┘
-                   │
-                   ▼
-    ┌─────────────────────────────────┐
-    │ 기사 본문 추출                   │
-    │ 네이버 뉴스 페이지의 #dic_area   │
-    │ 에서 HTML → 텍스트 변환          │
-    └──────────────┬──────────────────┘
-                   │
-                   ▼
-    Article 테이블에 저장 (status="pending")
+네이버 뉴스 API (7개 키워드 × 100건)
+      │
+      ▼
+URL 중복 체크 → 이미 있으면 SKIP
+      │
+      ▼
+언론사 식별 (URL 도메인 매핑 → 실패 시 페이지 스크래핑)
+      │
+      ▼
+기사 본문 추출 (네이버 뉴스 #dic_area)
+      │
+      ▼
+Article 저장 (status="pending")
 ```
 
-### 언론사 매핑 방식
-
-네이버 뉴스 API에는 언론사 정보가 포함되지 않습니다.
-그래서 2단계 방식으로 언론사를 식별합니다:
+### AI 분석 프로세스
 
 ```
-1단계: URL 도메인 매핑 (빠르고 정확)
-┌──────────────────────────────────────────┐
-│ www.chosun.com    → 조선일보              │
-│ www.mk.co.kr      → 매일경제              │
-│ news.kbs.co.kr    → KBS                  │
-│ ... (60개 이상 매핑)                      │
-└──────────────────────────────────────────┘
-
-2단계: 네이버 뉴스 페이지 스크래핑 (1단계 실패 시)
-┌──────────────────────────────────────────┐
-│ 네이버 뉴스 페이지에서                     │
-│ 언론사 로고의 alt 텍스트 추출              │
-└──────────────────────────────────────────┘
+pending/analyzing 기사 순회
+      │
+      ▼
+프롬프트 구성 (시스템 + Few-shot 3건 + 기사 본문 3000자)
+      │
+      ▼
+Gemini 2.5 Flash 호출 → 실패 시 OpenAI GPT-4o
+      │
+      ▼
+JSON 응답 파싱 + 검증
+      │
+      ▼
+Analysis 저장 + CaseGroup 자동 매칭/생성
+      │
+      ▼
+Article.status = "analyzed"
 ```
 
 ---
 
 ## 8. AI 분석 프롬프트 상세
-
-### LLM 호출 구조
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                   LLM 메시지 구조                            │
-│                                                            │
-│  1. [system] 시스템 프롬프트                                │
-│     - 역할: 소송금융 투자 심사역                             │
-│     - 판단 기준 C1~C6, X1                                  │
-│     - JSON 응답 형식 지정                                   │
-│                                                            │
-│  2. [user] Few-shot 예시 #1 (기사)                          │
-│  3. [assistant] Few-shot 예시 #1 (분석 결과)                 │
-│  4. [user] Few-shot 예시 #2 (기사)                          │
-│  5. [assistant] Few-shot 예시 #2 (분석 결과)                 │
-│  6. [user] Few-shot 예시 #3 (기사)                          │
-│  7. [assistant] Few-shot 예시 #3 (분석 결과)                 │
-│                                                            │
-│  8. [user] 실제 분석 대상 기사 (본문 3000자 제한)             │
-│                                                            │
-│  설정: temperature=0.1, max_tokens=8192, JSON 응답 강제     │
-└────────────────────────────────────────────────────────────┘
-```
 
 ### 소송금융 적합도 판단 기준
 
@@ -776,28 +622,16 @@ just analyze    # AI 분석
 ### 등급 판정 로직
 
 ```
-                    C1~C6 충족 개수
-                         │
-              ┌──────────┼──────────┐
-              │          │          │
-          4개 이상    2~3개      1개 이하
-              │          │          │
-              ▼          ▼          ▼
-         ┌────────┐ ┌────────┐ ┌────────┐
-         │  High  │ │ Medium │ │  Low   │
-         └────┬───┘ └────┬───┘ └────────┘
-              │          │
-              ▼          ▼
-         단, X1(종결) 해당 시 → 무조건 Low
+         C1~C6 충족 개수
+              │
+   ┌──────────┼──────────┐
+   │          │          │
+4개 이상    2~3개      1개 이하
+   │          │          │
+   ▼          ▼          ▼
+  High      Medium      Low
+   └──── X1 해당 시 무조건 Low ────┘
 ```
-
-### Few-shot 예시 (3건)
-
-| # | 기사 | 판정 | 이유 |
-|---|------|------|------|
-| 1 | 쿠팡 개인정보 유출, 소상공인 집단소송 예고 | **High** | C1(책임 명확), C2(상장 대기업), C3(집단 피해), C6(소송 예고) |
-| 2 | 압타밀 분유 리콜, 이물질 발견 | **Medium** | C2(글로벌 기업), C3(다수 소비자) — 2개 충족 |
-| 3 | 5·18 유족 국가배상 판결 확정 | **Low** | X1(대법원 판결 확정, 종결 사건) |
 
 ### LLM JSON 응답 형식
 
@@ -816,24 +650,6 @@ just analyze    # AI 분석
 }
 ```
 
-### LLM Fallback (백업) 전략
-
-```
- Gemini 2.5 Flash 호출 시도
-      │
-      ├── 성공 → 응답 JSON 파싱 → 검증 → 저장
-      │
-      └── 실패 (API 오류, 타임아웃 등)
-              │
-              ▼
-        OpenAI GPT-4o 호출 시도 (폴백)
-              │
-              ├── 성공 → 응답 JSON 파싱 → 검증 → 저장
-              │
-              └── 실패 → Article.status = "failed"
-                         Article.retry_count += 1
-```
-
 ---
 
 ## 9. 데이터베이스 모델
@@ -841,220 +657,87 @@ just analyze    # AI 분석
 ### ER 다이어그램
 
 ```
-┌─────────────────────┐       ┌──────────────────────────────────────────────────┐
-│    MediaSource      │       │                  Article                         │
-│─────────────────────│       │──────────────────────────────────────────────────│
-│ id (PK)            │       │ id (PK)                                         │
-│ name (unique)      │◄──────│ source_id (FK → MediaSource, nullable)          │
-│ url                │  1:N  │ title                                           │
-│ is_active          │       │ content (본문 텍스트)                             │
-│ created_at         │       │ url (unique — 중복 크롤링 방지)                   │
-└─────────────────────┘       │ author                                          │
-                              │ published_at (기사 발행일)                       │
-┌─────────────────────┐       │ collected_at (수집일)                            │
-│     Keyword         │       │ status: pending|analyzing|analyzed|failed        │
-│─────────────────────│       │ retry_count                                     │
-│ id (PK)            │       └──────────────────┬───────────────────────────────┘
-│ word (unique)      │                          │
-│ is_active          │                          │ 1:1
-│ created_at         │                          │
-└─────────┬───────────┘                          │
-          │                                      │
-          │ M:N (ArticleKeyword)                 │
-          │                                      ▼
-          │                    ┌──────────────────────────────────────────────────┐
-          └───────────────────▶│                 Analysis                         │
-                               │──────────────────────────────────────────────────│
-                               │ id (PK)                                         │
-                               │ article_id (FK → Article, OneToOne)             │
-┌─────────────────────┐        │ case_group_id (FK → CaseGroup, nullable)        │
-│    CaseGroup        │        │                                                 │
-│─────────────────────│        │ suitability: High | Medium | Low                │
-│ id (PK)            │◄───────│ suitability_reason (판단 근거, C1~C6 참조)       │
-│ case_id (unique)   │  N:1   │ case_category (사건 분야)                        │
-│   CASE-2026-001    │        │ defendant (상대방)                               │
-│ name (사건명)       │        │ damage_amount (피해 규모)                        │
-│ description        │        │ victim_count (피해자 수)                         │
-│ created_at         │        │ stage: 피해발생|절차진행|소송중|판결선고|종결       │
-│ updated_at         │        │ stage_detail (단계 상세)                         │
-└─────────────────────┘        │ summary (AI 요약 3~5문장)                       │
-                               │ llm_model (gemini-2.5-flash)                   │
-                               │ prompt_tokens                                  │
-                               │ completion_tokens                              │
-                               │ analyzed_at                                    │
-                               └──────────────────────────────────────────────────┘
+┌─────────────────────┐       ┌──────────────────────────────────────┐
+│    MediaSource      │       │              Article                  │
+│─────────────────────│       │──────────────────────────────────────│
+│ id (PK)            │◄──────│ source_id (FK, nullable)             │
+│ name (unique)      │  1:N  │ title                                │
+│ url                │       │ content (본문 텍스트)                  │
+│ is_active          │       │ url (unique)                         │
+└─────────────────────┘       │ published_at                        │
+                              │ status: pending|analyzing|analyzed|failed │
+┌─────────────────────┐       └──────────────────┬───────────────────┘
+│     Keyword         │                          │ 1:1
+│─────────────────────│                          ▼
+│ id (PK)            │       ┌──────────────────────────────────────┐
+│ word (unique)      │       │             Analysis                  │
+│ is_active          │       │──────────────────────────────────────│
+└─────────────────────┘       │ article_id (FK, OneToOne)           │
+                              │ case_group_id (FK, nullable)        │
+┌─────────────────────┐       │ suitability: High|Medium|Low        │
+│    CaseGroup        │       │ suitability_reason                  │
+│─────────────────────│       │ case_category                       │
+│ id (PK)            │◄──────│ defendant                           │
+│ case_id            │  N:1  │ damage_amount                       │
+│   2026-MM-XXX      │       │ victim_count                        │
+│ name (사건명)       │       │ stage                               │
+│ review_completed   │       │ summary                             │
+│ client_suitability │       │ is_relevant                         │
+│ accepted           │       │ analyzed_at                         │
+└─────────────────────┘       └──────────────────────────────────────┘
 ```
 
-### Article 상태 흐름도
+### 사건 그룹 자동 매칭 (Case ID)
 
 ```
-  ┌─────────┐     크롤링      ┌──────────┐    LLM 호출    ┌───────────┐
-  │  (없음)  │ ─────────────▶ │  pending  │ ────────────▶ │ analyzing │
-  └─────────┘    저장 시       └──────────┘   분석 시작     └─────┬─────┘
-                                    ▲                           │
-                                    │                     ┌─────┴─────┐
-                                    │                     │           │
-                              재분석 요청            성공         실패
-                                    │                     │           │
-                                    │                     ▼           ▼
-                               ┌────┴─────┐       ┌──────────┐ ┌────────┐
-                               │ 기존삭제  │       │ analyzed │ │ failed │
-                               └──────────┘       └──────────┘ └────────┘
+LLM 응답에서 case_name 추출
+      │
+      ▼
+① 기존 그룹 이름과 정확히 일치?  → YES → 기존 그룹 연결
+      │ NO
+      ▼
+② Python 유사도 ≥ 0.85?         → YES → 기존 그룹 연결
+      │ NO
+      ▼
+③ 제목 키워드 4개 이상 겹침?     → YES → 기존 그룹 연결
+      │ NO
+      ▼
+새 CaseGroup 생성 (case_id: 2026-MM-XXX)
 ```
 
-### 사건 그룹(CaseGroup) 자동 생성 흐름
-
-```
- LLM 응답에서 case_name 추출
- (예: "쿠팡 개인정보 유출")
-          │
-          ▼
- 같은 이름의 CaseGroup이 이미 있는가?
-          │
-    ┌─────┴─────┐
-    │ YES       │ NO
-    ▼           ▼
-  기존 그룹    유사도 매칭 (≥0.6)?
-  연결              │
-              ┌─────┴─────┐
-              │ YES       │ NO
-              ▼           ▼
-           기존 그룹    새 그룹 생성
-           연결        CASE-2026-XXX
-```
-
-**예시**: "쿠팡 개인정보 유출" 관련 기사 50건이 모두 CASE-2026-001로 자동 그룹핑
-
-### 사건 그룹 자동 매칭 (중복 방지)
-
-#### 문제
-
-AI가 같은 사건에 대해 조금씩 다른 이름을 만들 수 있습니다:
-
-```
-기사 A → "두쫀쿠 원재료 표시 및 이물질"  → 새 그룹 생성
-기사 B → "두쫀쿠 소비자 민원"            → 또 새 그룹 생성 (중복!)
-기사 C → "두쫀쿠 이물질 민원"            → 또 새 그룹 생성 (중복!)
-```
-
-#### 해결: 2단계 자동 매칭
-
-**1단계: LLM 프롬프트에 기존 사건 목록 제공**
-
-AI에게 기사를 분석 요청할 때, 이미 존재하는 사건 그룹 이름 목록을 함께 전달합니다.
-
-```
-## 기존 사건 그룹 목록
-- 쿠팡 개인정보 유출
-- 빗썸 비트코인 오지급
-- 두쫀쿠 피스타치오 이물질 민원
-- ...
-```
-
-AI는 이 목록을 보고, 분석 중인 기사가 기존 사건과 동일하면 **기존 이름을 그대로** 사용합니다.
-
-**2단계: Python 유사도 매칭 (안전장치)**
-
-AI가 기존 이름을 사용하지 않고 새 이름을 만든 경우를 대비한 2차 안전장치입니다.
-
-**유사도 계산 방식** (`_case_similarity()` 함수):
-
-1. 기본 문자열 유사도 (`SequenceMatcher`)
-2. 핵심 키워드 매칭 보너스:
-   - "소송", "피해", "민원" 같은 **일반 법률 용어는 제외** (stopwords)
-   - "쿠팡", "빗썸", "두쫀쿠" 같은 **핵심 엔티티(회사명/제품명)**만 비교
-   - 핵심 엔티티가 겹치면 유사도에 보너스 부여
-3. 최종 유사도 **0.6 이상**이면 기존 그룹에 매칭
-
-| 비교 | stopwords 미적용 | stopwords 적용 |
-|------|-----------------|---------------|
-| "두쫀쿠 이물질 소비자 피해" vs "해외직구 소비자 피해" | 0.96 (잘못된 매칭!) | 0.42 (매칭 안 됨) |
-| "두쫀쿠 이물질 소비자 피해" vs "두쫀쿠 피스타치오 이물질 민원" | 0.50 (매칭 실패!) | 0.80 (정확한 매칭) |
-
-### 무관 기사 자동 필터링 (is_relevant)
-
-AI가 아래에 해당하는 기사를 `is_relevant=false`로 판정하여 목록에서 자동 숨김 처리합니다:
-
-- 한국과 무관한 해외 뉴스 (외국 내부 소송, 외국 형사사건 등)
-- 단순 형사 범죄 보도 (개인 간 살인, 폭행 등)
-- 드라마/영화의 법정 스토리 소개 (실제 법적 분쟁이 아닌 허구)
-- 문학 작품, 서평, 전시회 등 문화/예술 기사
-- 칼럼, 사설 등 구체적 사건 정보가 없는 일반론
-- 게임 업데이트, 제품 발표 등 IT 업계 소식
-- 예방 캠페인, 정책 홍보, 마케팅 기사
-- 적합 조건(C1~C6)을 하나도 충족하지 않는 기사
-
-프론트엔드에서 "무관 기사 포함" 체크박스로 on/off 가능합니다.
+> LLM 프롬프트에 기존 사건 목록(최근 90일, 최대 150건)을 함께 전달하여 1차로 일관성을 유도합니다.
 
 ---
 
 ## 10. REST API 명세
 
-### 엔드포인트 목록
+### 주요 엔드포인트
 
 | Method | URL | 설명 |
 |--------|-----|------|
-| GET | `/api/analyses/` | 분석 결과 목록 (페이지네이션, 필터, 검색, 정렬) |
+| GET | `/api/analyses/` | 분석 결과 목록 (케이스 단위 뷰 포함) |
 | GET | `/api/analyses/{id}/` | 분석 결과 상세 |
-| GET | `/api/analyses/stats/` | 대시보드 통계 데이터 |
-| GET | `/api/analyses/export/` | 엑셀 파일 다운로드 |
+| GET | `/api/analyses/stats/` | 대시보드 통계 |
+| GET | `/api/analyses/export/` | 엑셀 다운로드 |
+| PATCH | `/api/analyses/{id}/review/` | 심사 결과 저장 |
 | GET | `/api/case-groups/` | 사건 그룹 목록 |
-| GET | `/api/case-groups/{id}/` | 사건 그룹 상세 |
+| GET | `/api/case-groups/{case_id}/` | 사건 그룹 상세 |
 | GET | `/api/articles/` | 기사 목록 |
-| GET | `/api/articles/{id}/` | 기사 상세 |
 | POST | `/api/articles/{id}/reanalyze/` | 기사 재분석 요청 |
 | GET | `/api/keywords/` | 키워드 목록 |
 | POST | `/api/keywords/` | 키워드 추가 |
-| DELETE | `/api/keywords/{id}/` | 키워드 삭제 |
-| GET | `/api/media-sources/` | 언론사 목록 |
 | GET | `/api/docs/` | Swagger API 문서 |
 
-### 분석 목록 필터 파라미터
-
-```
-GET /api/analyses/?suitability=High&stage=소송중&search=쿠팡&ordering=-analyzed_at&page=1
-```
+### 분석 목록 주요 파라미터
 
 | 파라미터 | 설명 | 예시 |
 |---------|------|------|
-| `suitability` | 적합도 (복수 선택 시 쉼표 구분) | `High` 또는 `High,Medium` |
-| `case_category` | 사건 유형 (부분 문자열 검색) | `개인정보` |
-| `stage` | 소송 단계 (정확히 일치) | `소송중` |
-| `date_from` | 기사 발행일 시작 | `2026-02-01` |
-| `date_to` | 기사 발행일 끝 | `2026-02-16` |
-| `case_group` | 사건 그룹 ID | `1` |
-| `search` | 제목/상대방/요약/유형 통합 검색 | `쿠팡` |
-| `ordering` | 정렬 기준 | `-analyzed_at` |
+| `suitability` | 적합도 필터 | `High`, `Medium`, `Low` |
+| `search` | 제목/케이스ID 통합 검색 | `쿠팡` |
+| `group_by_case` | 케이스 단위 뷰 | `true` |
+| `include_irrelevant` | 비관련 기사 포함 | `true` |
+| `ordering` | 정렬 기준 | `-analyzed_at`, `-damage_amount_num` |
 | `page` | 페이지 번호 | `1` |
-
-### 통계 API 응답 형식
-
-```
-GET /api/analyses/stats/
-```
-
-```json
-{
-  "today_collected": 654,
-  "today_high": 59,
-  "today_medium": 133,
-  "total_analyzed": 654,
-  "monthly_cost": 6774,
-  "suitability_distribution": [
-    {"name": "High", "value": 59},
-    {"name": "Medium", "value": 133},
-    {"name": "Low", "value": 462}
-  ],
-  "category_distribution": [
-    {"name": "행정", "count": 134},
-    {"name": "개인정보", "count": 73}
-  ],
-  "weekly_trend": [
-    {"date": "2026-02-10", "total": 0, "high": 0, "medium": 0},
-    {"date": "2026-02-16", "total": 654, "high": 59, "medium": 133}
-  ]
-}
-```
 
 ---
 
@@ -1063,79 +746,47 @@ GET /api/analyses/stats/
 ### 페이지 라우팅
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  TopNav (상단 내비게이션 - 네이비 배경, 골드 로고)         │
-│  ┌──────────┐  ┌──────────┐            ┌──────┐        │
-│  │ 대시보드  │  │ 분석 목록 │            │ 설정  │        │
-│  │    /     │  │ /analyses│            │/sett │        │
-│  └──────────┘  └──────────┘            └──────┘        │
-└─────────────────────────────────────────────────────────┘
-
-라우트:
-  /                → Dashboard     (대시보드)
-  /analyses        → AnalysisList  (분석 목록)
-  /analyses/:id    → AnalysisDetail (분석 상세)
-  /settings        → Settings      (키워드 관리)
+/                      → Dashboard     (대시보드)
+/analyses              → AnalysisList  (분석 목록 — 케이스 단위)
+/analyses/:id          → AnalysisDetail (기사 단위 상세)
+/analyses/case/:caseId → CaseDetail    (케이스 상세 + 심사)
+/settings              → Settings      (키워드 관리)
 ```
 
-### 대시보드 (Dashboard)
+### 케이스 상세 (CaseDetail)
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  대시보드                                                │
-│  AI 기반 법률 뉴스 분석 현황을 한눈에 확인하세요              │
-│                                                          │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐       │
-│  │오늘 수집 │ │분석 완료 │ │High 적합│ │Med 적합 │       │
-│  │   654   │ │   654   │ │   59    │ │   133   │       │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘       │
-│                                                          │
-│  ┌─────────────────┐  ┌─────────────────┐               │
-│  │  적합도 분포      │  │  사건 분야별 분포 │               │
-│  │  (도넛 차트)     │  │  (가로 바 차트)  │               │
-│  │  High / Med / Low│  │  상위 10개 분야  │               │
-│  └─────────────────┘  └─────────────────┘               │
-│                                                          │
-│  ┌──────────────────────────────────────┐               │
-│  │  주간 수집 추이 (라인 차트)            │               │
-│  │  전체 / High / Medium 3개 라인        │               │
-│  └──────────────────────────────────────┘               │
-│                                                          │
-│  ┌──────────────────────────────────────┐               │
-│  │  최근 분석 결과 (테이블 5건)           │               │
-│  │  적합도 | 기사제목 | 분야 | 상대방 | ..│               │
-│  └──────────────────────────────────────┘               │
-└──────────────────────────────────────────────────────────┘
-```
+- 케이스 소속 기사 목록 + 적합도 분포 표시
+- 기사 클릭 시 AI 요약 + 판단 근거 펼치기/접기
+- 로앤굿 심사 기능 (client_suitability, accepted)
 
 ---
 
 ## 12. 주요 설정값
 
-### .env 환경변수 전체 목록
+### .env 환경변수
 
-| 변수 | 설명 | 기본값/예시 |
-|------|------|-----------|
-| `DJANGO_SECRET_KEY` | Django 보안 키 | `your-secret-key` |
-| `DEBUG` | 디버그 모드 | `True` (개발) / `False` (운영) |
-| `ALLOWED_HOSTS` | 허용 호스트 | `localhost,127.0.0.1` |
-| `NAVER_CLIENT_ID` | 네이버 API 클라이언트 ID | 네이버 개발자센터에서 발급 |
-| `NAVER_CLIENT_SECRET` | 네이버 API 시크릿 | 네이버 개발자센터에서 발급 |
-| `OPENAI_API_KEY` | OpenAI API 키 (선택사항, 폴백용) | `sk-proj-...` |
-| `GEMINI_API_KEY` | Gemini API 키 (기본 LLM) | Google AI Studio에서 발급 |
+| 변수 | 설명 | 기본값 |
+|------|------|--------|
+| `DATABASE_URL` | PostgreSQL 접속 URL | `postgresql://postgres:postgres@localhost:5432/law_news` |
+| `DJANGO_SECRET_KEY` | Django 보안 키 | — |
+| `DEBUG` | 디버그 모드 | `True` |
+| `NAVER_CLIENT_ID` | 네이버 API ID | — |
+| `NAVER_CLIENT_SECRET` | 네이버 API 시크릿 | — |
+| `GEMINI_API_KEY` | Gemini API 키 | — |
 | `GEMINI_MODEL` | Gemini 모델명 | `gemini-2.5-flash` |
-| `LLM_TEMPERATURE` | LLM 응답 다양성 (낮을수록 일관적) | `0.1` |
+| `OPENAI_API_KEY` | OpenAI API 키 (선택) | — |
+| `LLM_TEMPERATURE` | LLM 응답 다양성 | `0.1` |
 | `LLM_MAX_TOKENS` | LLM 최대 응답 길이 | `8192` |
-| `REDIS_URL` | Redis 접속 주소 (Celery용) | `redis://localhost:6379/0` |
-| `CRAWL_INTERVAL_MINUTES` | 크롤링 주기 (분) | `60` |
-| `NEWS_KEYWORDS` | 수집 키워드 (쉼표 구분) | `소송,손해배상,집단소송,...` |
+| `CRAWL_INTERVAL_MINUTES` | 수집 주기 (분) | `60` |
+| `ANALYSIS_INTERVAL_MINUTES` | 분석 주기 (분) | `5` |
+| `NEWS_KEYWORDS` | 수집 키워드 (쉼표 구분) | `소송,손해배상,...` |
 
 ### LLM 비용 추정
 
 | 모델 | 비용 | 비고 |
 |------|------|------|
 | Gemini 2.5 Flash | 무료 티어 | 기본 LLM |
-| GPT-4o | 약 $0.007/건 (약 10원) | 폴백 LLM (선택사항) |
+| GPT-4o | 약 $0.007/건 (약 10원) | 폴백 (선택사항) |
 
 ---
 
@@ -1144,90 +795,44 @@ GET /api/analyses/stats/
 ### 일일 운영 루틴
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     일일 운영 순서                             │
-│                                                              │
-│  1. just dev  ─────────────────────────────────▶ 즉시        │
-│     서버 실행 (이미 실행 중이면 생략)                           │
-│                                                              │
-│  2. just pipeline ─────────────────────────────▶ 약 5~40분   │
-│     뉴스 수집 + AI 분석                                       │
-│                                                              │
-│  3. 대시보드 확인 ───────────────────────────────▶ 즉시       │
-│     http://localhost:5173                                    │
-│                                                              │
-│  4. High 사건 확인 ──────────────────────────────▶ 즉시       │
-│     분석 목록 → "High + Medium" 필터 선택                     │
-│                                                              │
-│  5. 엑셀 다운로드 (필요 시) ─────────────────────▶ 즉시       │
-│     분석 목록 → "엑셀 다운로드" 버튼                           │
-└──────────────────────────────────────────────────────────────┘
+1. Docker Desktop 실행 확인
+2. just pg-start      ← PostgreSQL 시작
+3. just dev           ← 서버 실행 (APScheduler 자동 시작)
+   → 수집: 60분마다 자동
+   → 분석: 5분마다 자동
+4. 대시보드 확인       ← http://localhost:5173
+5. High/Medium 사건 검토 + 로앤굿 심사 입력
+6. 엑셀 다운로드 (필요 시)
 ```
 
-### 키워드 관리
-
-설정 페이지(`/settings`)에서 수집 키워드를 추가/삭제할 수 있습니다.
-
-현재 기본 키워드 (7개):
-`소송`, `손해배상`, `집단소송`, `공동소송`, `피해자`, `피해보상`, `피해구제`
-
-### 특정 기사 재분석
-
-분석 상세 페이지에서 **"재분석 요청"** 버튼을 클릭하거나:
+### 전체 재분석 (DB 초기화 후)
 
 ```powershell
-just reanalyze <기사ID>
+just db-reset-analyses    # Analysis + CaseGroup 삭제, 기사 pending 리셋
+just analyze              # 전체 재분석 (백그라운드 권장)
+```
+
+### 케이스 그룹 재매칭
+
+```powershell
+just regroup              # 최근 분석만
+just regroup --all        # 전체 재매칭
+just regroup --dry-run    # 미리보기 (실제 변경 없음)
 ```
 
 ---
 
 ## 14. 트러블슈팅
 
-### Windows에서 한글 인코딩 오류
-
-```
-UnicodeEncodeError: 'charmap' codec can't encode characters
-```
-
-**해결**: 환경변수 설정 후 재실행
-
-```bash
-# PowerShell
-$env:PYTHONIOENCODING="utf-8"
-python backend/manage.py runserver
-```
-
-### pip/uv 패키지 설치 실패
-
-```bash
-# pip이 없는 경우
-python -m ensurepip --upgrade
-
-# uv로 설치
-uv sync
-```
-
-### 포트 충돌 (5173 이미 사용 중)
-
-Vite가 자동으로 다음 포트(5174 등)를 선택합니다. 터미널에 표시된 URL을 확인하세요.
-
-### 네이버 API 호출 제한
-
-네이버 검색 API는 일일 25,000건 제한이 있습니다.
-7개 키워드 x 100건 = 700건이므로 일반적으로 문제없습니다.
-
-### LLM 분석 실패 (failed 상태) 기사 재처리
-
-```powershell
-# 실패한 기사를 다시 분석
-just analyze
-```
-
-### Django 마이그레이션 오류
-
-```powershell
-just migrate
-```
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| `just` 명령어 인식 안 됨 | just 미설치 | `winget install Casey.Just` 후 터미널 재시작 |
+| PostgreSQL 연결 실패 | Docker 미실행 | Docker Desktop 실행 → `just pg-start` |
+| 서버 시작 오류 | 의존성/마이그레이션 문제 | `just install` → `just migrate` |
+| 크롤링 0건 수집 | 네이버 API 키 오류 | `.env` `NAVER_CLIENT_ID/SECRET` 확인 |
+| AI 분석 실패 | Gemini API 키 오류 | `.env` `GEMINI_API_KEY` 확인 |
+| Windows 한글 인코딩 오류 | cp949 인코딩 충돌 | `$env:PYTHONIOENCODING="utf-8"` 설정 후 재실행 |
+| 포트 충돌 | 5173 사용 중 | Vite가 자동으로 다음 포트 선택 — 터미널 확인 |
 
 ---
 

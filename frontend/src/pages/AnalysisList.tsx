@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Analysis, PaginatedResponse } from '../lib/types';
 import SuitabilityBadge from '../components/SuitabilityBadge';
+import AiSuitabilityDisplay from '../components/AiSuitabilityDisplay';
 import StageBadge from '../components/StageBadge';
 import TableSkeleton from '../components/TableSkeleton';
 
@@ -272,7 +273,9 @@ export default function AnalysisList() {
                         )}
                       </td>
                       <td className="px-3 py-2.5">
-                        <SuitabilityBadge value={a.suitability} />
+                        {a.related_count > 1 && a.suitability_distribution
+                          ? <AiSuitabilityDisplay dist={a.suitability_distribution} />
+                          : <SuitabilityBadge value={a.suitability} />}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[100px] truncate" title={a.case_category}>
                         {a.case_category || '—'}

@@ -20,6 +20,7 @@ dependencies = [
     "google-genai>=1.64.0",
     "apscheduler>=3.11.2",
     "fpdf2>=2.8",
+    "psycopg[binary]>=3.3.3",
 ]
 
 [tool.uv]

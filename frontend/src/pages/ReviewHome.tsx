@@ -302,7 +302,7 @@ export default function ReviewHome() {
         {loading ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <tbody><TableSkeleton cols={7} rows={10} /></tbody>
+              <tbody><TableSkeleton cols={6} rows={10} /></tbody>
             </table>
           </div>
         ) : (
@@ -312,7 +312,6 @@ export default function ReviewHome() {
                 <tr className="border-b text-left text-xs text-gray-500 bg-gray-50">
                   <th className="px-4 py-3 font-medium whitespace-nowrap">케이스 ID</th>
                   <th className="px-4 py-3 font-medium">사건명</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">기사 수</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap">AI 적합도</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap">로앤굿 심사결과</th>
                   <th className="px-4 py-3 font-medium text-center whitespace-nowrap">심사완료</th>
@@ -343,7 +342,6 @@ export default function ReviewHome() {
                           {c.name}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{c.article_count}</td>
                       <td className="px-4 py-3">
                         <AiSuitabilityDisplay dist={c.suitability_distribution} />
                       </td>
@@ -382,7 +380,7 @@ export default function ReviewHome() {
                 })}
                 {cases.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-gray-400">
+                    <td colSpan={6} className="py-12 text-center text-gray-400">
                       사건 데이터가 없습니다
                     </td>
                   </tr>
