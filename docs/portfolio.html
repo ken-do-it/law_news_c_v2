@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LawNGood AI 뉴스 분석 시스템 — 포트폴리오</title>
+  <style>
+    :root {
+      --navy: #1a2b4a;
+      --navy-light: #2d4270;
+      --gold: #c9a84c;
+      --gold-light: #f0d080;
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --high: #16a34a;
+      --high-bg: #f0fdf4;
+      --medium: #d97706;
+      --medium-bg: #fffbeb;
+      --low: #6b7280;
+      --low-bg: #f9fafb;
+      --code-bg: #f1f5f9;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    /* ── 헤더 ── */
+    .hero {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+      color: white;
+      padding: 72px 24px 60px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(201,168,76,0.2);
+      border: 1px solid var(--gold);
+      color: var(--gold-light);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 48px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+    .hero h1 span { color: var(--gold-light); }
+    .hero p {
+      font-size: 17px;
+      color: rgba(255,255,255,0.75);
+      max-width: 640px;
+      margin: 0 auto 32px;
+    }
+    .hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+    .tag {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.9);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 12px;
+      border-radius: 6px;
+    }
+
+    /* ── 레이아웃 ── */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 64px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    section:last-of-type { border-bottom: none; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--navy);
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+    h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 10px;
+    }
+    .lead {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 680px;
+      margin-bottom: 40px;
+    }
+
+    /* ── 지표 카드 ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px 20px;
+      text-align: center;
+    }
+    .metric-card .number {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--navy);
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .metric-card .number.gold { color: var(--gold); }
+    .metric-card .label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* ── 핵심 문제 카드 ── */
+    .problem-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 640px) { .problem-grid { grid-template-columns: 1fr; } }
+    .problem-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .problem-card .icon { font-size: 28px; margin-bottom: 12px; }
+    .problem-card p { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── 아키텍처 다이어그램 ── */
+    .arch-diagram {
+      background: var(--navy);
+      border-radius: 16px;
+      padding: 36px;
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      font-size: 13px;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.9;
+      overflow-x: auto;
+      margin-bottom: 32px;
+    }
+    .arch-diagram .hl { color: var(--gold-light); font-weight: 600; }
+    .arch-diagram .dim { color: rgba(255,255,255,0.4); }
+    .arch-diagram .green { color: #86efac; }
+    .arch-diagram .blue { color: #93c5fd; }
+
+    /* ── 기술 스택 ── */
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .stack-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .stack-card h4 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    .stack-items { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stack-item {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--navy);
+    }
+    .stack-item.primary {
+      background: var(--navy);
+      color: white;
+      border-color: var(--navy);
+    }
+
+    /* ── 핵심 기능 ── */
+    .feature-list { display: flex; flex-direction: column; gap: 24px; }
+    .feature-item {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      align-items: start;
+    }
+    .feature-item .num {
+      width: 48px;
+      height: 48px;
+      background: var(--navy);
+      color: white;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .feature-item p { font-size: 14px; color: var(--text-muted); margin-top: 6px; }
+
+    /* ── 기술적 도전 ── */
+    .challenge-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .challenge-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .challenge-card .problem-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #ef4444;
+      margin-bottom: 8px;
+    }
+    .challenge-card .solution-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--high);
+      margin-top: 14px;
+      margin-bottom: 8px;
+    }
+    .challenge-card p { font-size: 13.5px; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── 코드 블록 ── */
+    .code-block {
+      background: var(--navy);
+      border-radius: 10px;
+      padding: 24px;
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      color: rgba(255,255,255,0.85);
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+    .code-block .comment { color: rgba(255,255,255,0.35); }
+    .code-block .keyword { color: #c4b5fd; }
+    .code-block .string { color: #86efac; }
+    .code-block .fn { color: #93c5fd; }
+    .code-block .num { color: var(--gold-light); }
+
+    /* ── 플로우 다이어그램 ── */
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 20px 0;
+    }
+    .flow-step {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--navy);
+    }
+    .flow-step.active {
+      background: var(--navy);
+      color: white;
+      border-color: var(--navy);
+    }
+    .flow-arrow { color: var(--text-muted); font-size: 18px; }
+
+    /* ── 결과 강조 ── */
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .result-card {
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid;
+    }
+    .result-card.high { background: var(--high-bg); border-color: #bbf7d0; }
+    .result-card.medium { background: var(--medium-bg); border-color: #fde68a; }
+    .result-card.neutral { background: var(--code-bg); border-color: var(--border); }
+    .result-card .result-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+    .result-card.high .result-label { color: var(--high); }
+    .result-card.medium .result-label { color: var(--medium); }
+    .result-card.neutral .result-label { color: var(--text-muted); }
+    .result-card .result-num { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: var(--navy); }
+    .result-card p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+    /* ── 테이블 ── */
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead tr { background: var(--code-bg); }
+    th { padding: 10px 16px; text-align: left; font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+    /* ── 인용 ── */
+    blockquote {
+      border-left: 3px solid var(--gold);
+      padding: 16px 20px;
+      background: var(--surface);
+      border-radius: 0 8px 8px 0;
+      font-style: italic;
+      color: var(--text-muted);
+      margin: 24px 0;
+    }
+
+    /* ── 푸터 ── */
+    footer {
+      background: var(--navy);
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      padding: 40px 24px;
+      font-size: 13px;
+    }
+    footer strong { color: rgba(255,255,255,0.9); }
+  </style>
+</head>
+<body>
+
+<!-- ━━━━━━━━━━━━━━ HERO ━━━━━━━━━━━━━━ -->
+<div class="hero">
+  <div class="hero-badge">Portfolio Project · 2026</div>
+  <h1>LawNGood<br><span>AI 법률 뉴스 분석 시스템</span></h1>
+  <p>
+    법률 뉴스를 자동 수집하고 Gemini AI가 소송금융 투자 적합도를 자동 판정하는
+    풀스택 AI 업무 자동화 시스템
+  </p>
+  <div class="hero-tags">
+    <span class="tag">Django REST Framework</span>
+    <span class="tag">React + TypeScript</span>
+    <span class="tag">Google Gemini 2.5 Flash</span>
+    <span class="tag">PostgreSQL</span>
+    <span class="tag">APScheduler</span>
+    <span class="tag">LLM Few-shot Prompting</span>
+    <span class="tag">Case Grouping Algorithm</span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━ 프로젝트 개요 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">Overview</div>
+    <h2>프로젝트 개요</h2>
+    <p class="lead">
+      소송금융 전문 법무법인 <strong>로앤굿(LawNGood)</strong>의 내부 업무 자동화를 위해
+      기획·개발한 AI 기반 법률 뉴스 분석 시스템입니다.
+      매일 수백 건의 법률 뉴스를 자동 수집하고, LLM이 소송금융 투자 가이드라인(C1~C6)에
+      따라 적합도를 판정하여 담당자가 빠르게 고위험/고수익 사건을 식별할 수 있도록 합니다.
+    </p>
+
+    <div class="metrics">
+      <div class="metric-card">
+        <div class="number">4,777</div>
+        <div class="label">수집된 법률 뉴스 기사</div>
+      </div>
+      <div class="metric-card">
+        <div class="number gold">72</div>
+        <div class="label">AI가 분류한 사건 그룹</div>
+      </div>
+      <div class="metric-card">
+        <div class="number">5분</div>
+        <div class="label">분석 자동 실행 주기</div>
+      </div>
+      <div class="metric-card">
+        <div class="number">3</div>
+        <div class="label">LLM 단계 Few-shot 판정</div>
+      </div>
+      <div class="metric-card">
+        <div class="number gold">95</div>
+        <div class="label">등록 언론사 소스</div>
+      </div>
+    </div>
+
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="icon">😩</div>
+        <h3>해결한 문제</h3>
+        <p>
+          담당자가 매일 수십~수백 건의 법률 뉴스를 수동으로 검색·읽고 투자 가치를
+          판단하는 반복 작업에 수 시간을 소비하고 있었습니다.
+          유사 사건의 중복 파악도 수작업에 의존했습니다.
+        </p>
+      </div>
+      <div class="problem-card">
+        <div class="icon">🚀</div>
+        <h3>달성한 결과</h3>
+        <p>
+          수집·분석·분류·정렬·엑셀 내보내기까지 전 과정을 자동화하여
+          담당자는 AI가 High로 판정한 사건만 집중 검토하면 됩니다.
+          소요 시간이 수 시간 → 수 분으로 단축되었습니다.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ 아키텍처 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">Architecture</div>
+    <h2>시스템 아키텍처</h2>
+    <p class="lead">
+      Redis·Celery 없이 APScheduler만으로 자동화 파이프라인을 구성하여
+      인프라 복잡도를 최소화했습니다. 수집과 분석을 독립 잡으로 분리해
+      각각 최적의 주기로 실행합니다.
+    </p>
+
+    <div class="arch-diagram">
+<pre><span class="hl">┌─────────────────── Frontend (Vite + React + TypeScript) ───────────────────┐</span>
+│  Dashboard  │  AnalysisList (케이스 단위)  │  CaseDetail  │  Settings      │
+<span class="dim">└──────────────────────────── /api/* proxy ──────────────────────────────────┘</span>
+                                    │
+<span class="hl">┌─────────────────── Backend (Django REST Framework) ────────────────────────┐</span>
+│                                                                             │
+│  <span class="green">articles app</span>         <span class="blue">analyses app</span>          <span class="hl">scheduler app</span>                 │
+│  ├ crawlers.py        ├ tasks.py              ├ <span class="hl">crawl job  ← 60분마다</span>      │
+│  ├ models.py          ├ prompts.py            └ <span class="hl">analyze job ← 5분마다</span>       │
+│  └ serializers.py     ├ serializers.py                                      │
+│                       ├ views.py                                            │
+│                       └ management/                                         │
+│                           └ run_analysis.py                                 │
+│                                                                             │
+│  <span class="dim">PostgreSQL 16 (Docker)  ─  localhost:5432/law_news</span>                       │
+<span class="hl">└────────────────────────────────────────────────────────────────────────────┘</span>
+          │                              │
+<span class="green">┌──────────────────┐</span>        <span class="blue">┌──────────────────────┐</span>
+<span class="green">│ 네이버 뉴스 API   │</span>        <span class="blue">│ Google Gemini 2.5    │</span>
+<span class="green">│ 7개 키워드 수집   │</span>        <span class="blue">│ Flash  (기본 LLM)    │</span>
+<span class="green">└──────────────────┘</span>        <span class="blue">│ OpenAI GPT-4o (폴백) │</span>
+                             <span class="blue">└──────────────────────┘</span></pre>
+    </div>
+
+    <div class="flow">
+      <div class="flow-step active">네이버 API 수집</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">중복 제거</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">본문 추출</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step active">Gemini 분석</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">JSON 검증</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step active">Case 그룹핑</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">대시보드</div>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ 기술 스택 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">Tech Stack</div>
+    <h2>기술 스택</h2>
+    <p class="lead">각 레이어에서 목적에 맞는 도구를 선택했습니다.</p>
+
+    <div class="stack-grid">
+      <div class="stack-card">
+        <h4>Backend</h4>
+        <div class="stack-items">
+          <span class="stack-item primary">Python 3.12</span>
+          <span class="stack-item primary">Django 5</span>
+          <span class="stack-item primary">DRF</span>
+          <span class="stack-item">APScheduler</span>
+          <span class="stack-item">psycopg 3</span>
+          <span class="stack-item">BeautifulSoup4</span>
+          <span class="stack-item">openpyxl</span>
+          <span class="stack-item">drf-spectacular</span>
+        </div>
+      </div>
+      <div class="stack-card">
+        <h4>Frontend</h4>
+        <div class="stack-items">
+          <span class="stack-item primary">React 19</span>
+          <span class="stack-item primary">TypeScript</span>
+          <span class="stack-item primary">Vite 7</span>
+          <span class="stack-item">Tailwind CSS 4</span>
+          <span class="stack-item">Recharts</span>
+          <span class="stack-item">React Router 7</span>
+          <span class="stack-item">Axios</span>
+        </div>
+      </div>
+      <div class="stack-card">
+        <h4>AI / LLM</h4>
+        <div class="stack-items">
+          <span class="stack-item primary">Gemini 2.5 Flash</span>
+          <span class="stack-item">OpenAI GPT-4o</span>
+          <span class="stack-item">Few-shot Prompting</span>
+          <span class="stack-item">JSON Mode</span>
+          <span class="stack-item">SequenceMatcher</span>
+        </div>
+      </div>
+      <div class="stack-card">
+        <h4>Infrastructure</h4>
+        <div class="stack-items">
+          <span class="stack-item primary">PostgreSQL 16</span>
+          <span class="stack-item">Docker</span>
+          <span class="stack-item">uv</span>
+          <span class="stack-item">bun</span>
+          <span class="stack-item">Justfile</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ 핵심 기능 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">Key Features</div>
+    <h2>핵심 기능</h2>
+    <p class="lead">단순 뉴스 수집을 넘어, 업무 플로우 전체를 자동화했습니다.</p>
+
+    <div class="feature-list">
+      <div class="feature-item">
+        <div class="num">1</div>
+        <div>
+          <h3>자동 뉴스 수집 파이프라인</h3>
+          <p>
+            네이버 뉴스 API로 7개 법률 키워드(소송, 손해배상, 집단소송 등)를 60분마다 자동 검색합니다.
+            URL 기반 중복 제거 후 기사 본문을 직접 스크래핑하며, 95개 언론사 도메인 매핑으로
+            언론사명을 정확히 식별합니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="num">2</div>
+        <div>
+          <h3>LLM 기반 소송금융 적합도 판정</h3>
+          <p>
+            Gemini 2.5 Flash에게 소송금융 심사역 역할을 부여하고, 6가지 투자 기준(C1~C6)과
+            Few-shot 예시 3건을 함께 전달합니다. 응답은 JSON 형식으로 강제하여
+            Pydantic으로 검증 후 저장합니다. Gemini 실패 시 OpenAI GPT-4o로 자동 폴백합니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="num">3</div>
+        <div>
+          <h3>사건 자동 그룹핑 알고리즘 (Case ID)</h3>
+          <p>
+            같은 사건을 다룬 기사들을 하나의 Case ID로 자동 묶습니다.
+            3단계 매칭 — ① 정확 이름 일치, ② Python SequenceMatcher 유사도 ≥ 0.85,
+            ③ 제목 핵심 키워드 4개 이상 공유 — 을 순서대로 적용합니다.
+            법률 불용어(소송, 피해 등)를 제거하여 "쿠팡 개인정보 유출"과
+            "해외직구 소비자 피해"가 잘못 묶이는 문제를 방지합니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="num">4</div>
+        <div>
+          <h3>대시보드 & 분석 목록 UI</h3>
+          <p>
+            케이스 단위 뷰에서 사건별 적합도 분포(High/Medium/Low 기사 수)를 한눈에 보여줍니다.
+            분석일, 피해 규모, 적합도 기준 정렬과 발행일 기준 정렬을 지원하며,
+            케이스 상세 페이지에서 소속 기사를 펼쳐보고 로앤굿 심사 결과를 직접 입력할 수 있습니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="feature-item">
+        <div class="num">5</div>
+        <div>
+          <h3>엑셀 내보내기 & 운영 관리</h3>
+          <p>
+            현재 필터 조건을 그대로 엑셀로 내보낼 수 있습니다.
+            <code>just analyze --limit N</code>으로 건수를 제어하며 bulk 재분석이 가능하고,
+            <code>just db-reset-analyses</code>로 기사를 보존한 채 분석 결과만 초기화할 수 있습니다.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ 기술적 도전 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">Engineering Challenges</div>
+    <h2>기술적 도전과 해결</h2>
+    <p class="lead">개발 과정에서 맞닥뜨린 실제 문제들과 해결 방식입니다.</p>
+
+    <div class="challenge-grid">
+      <div class="challenge-card">
+        <div class="problem-label">문제 1</div>
+        <h3>SQLite 동시 쓰기 잠금</h3>
+        <p>
+          APScheduler가 분석 태스크를 실행하는 동안 Django 개발 서버의
+          다른 요청이 DB에 쓰려 하면 <code>OperationalError: database is locked</code>가
+          발생했습니다. SQLite의 단일 쓰기 제약이 근본 원인이었습니다.
+        </p>
+        <div class="solution-label">해결</div>
+        <p>
+          SQLite에서 <strong>PostgreSQL 16 (Docker)</strong>으로 마이그레이션했습니다.
+          Django의 <code>DATABASE_URL</code> 파싱 로직을 settings.py에 직접 구현하여
+          추가 라이브러리 없이 전환했습니다.
+          데이터는 Python <code>serializers.serialize/deserialize</code>로 마이그레이션했습니다.
+        </p>
+      </div>
+
+      <div class="challenge-card">
+        <div class="problem-label">문제 2</div>
+        <h3>AI의 비결정적 사건명 생성</h3>
+        <p>
+          같은 사건을 다루는 기사들에 대해 LLM이 매번 조금씩 다른 사건명을
+          생성하여 불필요한 Case Group이 폭증했습니다.
+          (예: "쿠팡 물류 사고"와 "쿠팡 배송 노동자 사망"이 별개 그룹으로 생성)
+        </p>
+        <div class="solution-label">해결</div>
+        <p>
+          <strong>2중 안전장치</strong>를 구현했습니다.
+          ① 프롬프트에 기존 사건 목록(최근 90일, 최대 150건)을 주입하여 LLM이 기존 이름을 재사용하도록 유도.
+          ② Python SequenceMatcher + 핵심 키워드 매칭으로 AI가 새 이름을 만들어도 기존 그룹에 귀속시킵니다.
+        </p>
+      </div>
+
+      <div class="challenge-card">
+        <div class="problem-label">문제 3</div>
+        <h3>수집/분석 주기 충돌</h3>
+        <p>
+          수집(60분)과 분석(5분)이 하나의 파이프라인 잡으로 묶여 있어,
+          분석이 오래 걸리면 수집이 지연되고, 분석 중에 새 수집을 시작하면
+          DB 트랜잭션이 꼬이는 문제가 있었습니다.
+        </p>
+        <div class="solution-label">해결</div>
+        <p>
+          APScheduler의 두 개 독립 잡(<code>crawl</code>, <code>analyze</code>)으로 분리하고,
+          각각 독립 락(<code>threading.Lock</code>)을 사용했습니다.
+          잡 완료 후 다음 실행을 동적으로 재예약하여 오버랩을 원천 차단했습니다.
+        </p>
+      </div>
+
+      <div class="challenge-card">
+        <div class="problem-label">문제 4</div>
+        <h3>적합도 분포 N+1 쿼리</h3>
+        <p>
+          분석 목록의 케이스 단위 뷰에서 각 케이스별 High/Medium/Low 기사 수를
+          개별 쿼리로 조회하면 케이스 수만큼 쿼리가 발생했습니다.
+        </p>
+        <div class="solution-label">해결</div>
+        <p>
+          ViewSet의 <code>get_queryset()</code>에 Django ORM <code>Count + filter=Q(...)</code>
+          어노테이션을 추가하여 단일 SQL 쿼리에서 분포를 계산했습니다.
+          <code>suitability_distribution</code> SerializerMethodField로
+          프론트엔드에 깔끔하게 노출했습니다.
+        </p>
+      </div>
+    </div>
+
+    <div style="margin-top: 32px;">
+      <h3 style="margin-bottom: 16px;">사건 그룹핑 핵심 로직</h3>
+      <div class="code-block">
+<pre><span class="comment"># 법률 불용어 제거 후 핵심 엔티티 추출</span>
+LAW_STOPWORDS = {<span class="string">"소송"</span>, <span class="string">"피해"</span>, <span class="string">"손해"</span>, <span class="string">"배상"</span>, <span class="string">"집단"</span>, <span class="string">"공동"</span>, <span class="string">"민원"</span>, ...}
+
+<span class="keyword">def</span> <span class="fn">_case_similarity</span>(name_a: str, name_b: str) -> float:
+    <span class="comment"># 1단계: 기본 문자열 유사도</span>
+    base_ratio = SequenceMatcher(<span class="keyword">None</span>, name_a, name_b).ratio()
+
+    <span class="comment"># 2단계: 핵심 키워드(불용어 제거 후) 겹침 보너스</span>
+    kw_a = {w <span class="keyword">for</span> w <span class="keyword">in</span> name_a.split() <span class="keyword">if</span> w <span class="keyword">not in</span> LAW_STOPWORDS}
+    kw_b = {w <span class="keyword">for</span> w <span class="keyword">in</span> name_b.split() <span class="keyword">if</span> w <span class="keyword">not in</span> LAW_STOPWORDS}
+    overlap = len(kw_a & kw_b)
+
+    bonus = min(overlap * <span class="num">0.1</span>, <span class="num">0.3</span>)
+    <span class="keyword">return</span> min(base_ratio + bonus, <span class="num">1.0</span>)
+
+<span class="comment"># 3단계 매칭 순서</span>
+<span class="comment"># ① 정확 이름 일치 → 기존 그룹</span>
+<span class="comment"># ② similarity ≥ 0.85 → 기존 그룹</span>
+<span class="comment"># ③ 제목 키워드 4개 이상 공유 → 기존 그룹</span>
+<span class="comment"># ④ 신규 CaseGroup 생성 (2026-MM-XXX)</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ AI 프롬프트 설계 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">LLM Design</div>
+    <h2>LLM 프롬프트 설계</h2>
+    <p class="lead">
+      단순 요약 요청이 아닌, 소송금융 심사역의 판단 기준을 코드화한 구조화된 프롬프트입니다.
+    </p>
+
+    <div class="table-wrap" style="margin-bottom: 32px;">
+      <table>
+        <thead>
+          <tr>
+            <th>판단 기준</th>
+            <th>내용</th>
+            <th>등급 산출</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>C1</strong></td><td>상대방의 법적 책임이 명확함</td><td rowspan="6" style="vertical-align:middle; text-align:center;">
+            충족 4개↑ → <strong style="color:var(--high)">High</strong><br>
+            충족 2~3개 → <strong style="color:var(--medium)">Medium</strong><br>
+            충족 1개↓ → <strong>Low</strong><br>
+            <br>
+            X1 해당 시 → <strong>Low</strong>
+          </td></tr>
+          <tr><td><strong>C2</strong></td><td>상대방 자력이 충분함 (대기업, 상장사 등)</td></tr>
+          <tr><td><strong>C3</strong></td><td>집단 피해 존재 (수십 명 이상)</td></tr>
+          <tr><td><strong>C4</strong></td><td>피해 규모가 큼 (수억 원 이상)</td></tr>
+          <tr><td><strong>C5</strong></td><td>증거 확보 가능</td></tr>
+          <tr><td><strong>C6</strong></td><td>공적 절차 진행 중</td></tr>
+          <tr><td><strong>X1</strong></td><td>이미 종결된 사건 (판결 확정, 합의 완료)</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <blockquote>
+      "AI에게 단순히 '중요한 뉴스인지 판단해줘'라고 하지 않고, 소송금융 심사역이 사용하는
+      실제 기준(C1~C6)을 프롬프트에 정의하고 Few-shot 예시 3건을 함께 제공했습니다.
+      temperature=0.1로 설정하여 판정의 일관성을 확보했습니다."
+    </blockquote>
+
+    <h3 style="margin-bottom:12px;">LLM 응답 구조 (JSON)</h3>
+    <div class="code-block">
+<pre>{
+  <span class="string">"suitability"</span>: <span class="string">"High"</span>,
+  <span class="string">"suitability_reason"</span>: <span class="string">"C1(책임 명확), C2(대기업), C3(집단 피해), C6(공적 절차) — 4개 충족"</span>,
+  <span class="string">"case_category"</span>: <span class="string">"개인정보"</span>,
+  <span class="string">"defendant"</span>: <span class="string">"쿠팡"</span>,
+  <span class="string">"damage_amount"</span>: <span class="string">"미상"</span>,
+  <span class="string">"victim_count"</span>: <span class="string">"다수 소상공인"</span>,
+  <span class="string">"stage"</span>: <span class="string">"피해 발생"</span>,
+  <span class="string">"stage_detail"</span>: <span class="string">"집단소송 준비 중"</span>,
+  <span class="string">"summary"</span>: <span class="string">"쿠팡에서 대규모 개인정보 유출 사태가 발생하여..."</span>,
+  <span class="string">"case_name"</span>: <span class="string">"쿠팡 개인정보 유출"</span>,
+  <span class="string">"is_relevant"</span>: <span class="keyword">true</span>
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ 주요 설계 결정 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">Design Decisions</div>
+    <h2>주요 설계 결정</h2>
+    <p class="lead">각 기술 선택에는 명확한 이유가 있습니다.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>결정</th>
+            <th>선택</th>
+            <th>이유</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>스케줄링</strong></td>
+            <td>APScheduler</td>
+            <td>Celery+Redis 대신 단일 프로세스 내 실행. Redis 서버 불필요. 내부 도구에 적합한 단순 구조.</td>
+          </tr>
+          <tr>
+            <td><strong>DB</strong></td>
+            <td>PostgreSQL (Docker)</td>
+            <td>SQLite 동시 쓰기 잠금 문제 해결. 운영 환경과 동일한 DB를 개발 단계부터 사용.</td>
+          </tr>
+          <tr>
+            <td><strong>LLM</strong></td>
+            <td>Gemini 2.5 Flash</td>
+            <td>무료 티어에서 충분한 성능. 긴 프롬프트(Few-shot + 기사 본문) 처리에 유리한 컨텍스트 윈도우.</td>
+          </tr>
+          <tr>
+            <td><strong>프론트엔드</strong></td>
+            <td>Vite + React</td>
+            <td>내부 업무 도구 특성상 빠른 개발 속도 우선. TypeScript로 API 응답 타입 안정성 확보.</td>
+          </tr>
+          <tr>
+            <td><strong>패키지 관리</strong></td>
+            <td>uv + bun</td>
+            <td>pip 대비 10~100배 빠른 설치 속도. lockfile 기반 재현 가능한 환경.</td>
+          </tr>
+          <tr>
+            <td><strong>API 설계</strong></td>
+            <td>group_by_case 파라미터</td>
+            <td>기사 단위 / 케이스 단위 뷰를 단일 엔드포인트에서 처리. 프론트엔드 API 호출 단순화.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ 결과 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">Results</div>
+    <h2>분석 결과 현황</h2>
+    <p class="lead">현재까지 누적된 실제 분석 데이터입니다.</p>
+
+    <div class="result-grid">
+      <div class="result-card high">
+        <div class="result-label">High 적합도</div>
+        <div class="result-num">28건</div>
+        <p>즉시 검토 권장 사건</p>
+      </div>
+      <div class="result-card medium">
+        <div class="result-label">Medium 적합도</div>
+        <div class="result-num">20건</div>
+        <p>추가 조사 필요 사건</p>
+      </div>
+      <div class="result-card neutral">
+        <div class="result-label">사건 그룹</div>
+        <div class="result-num">72개</div>
+        <p>AI가 자동 분류한 독립 사건</p>
+      </div>
+      <div class="result-card neutral">
+        <div class="result-label">수집 기사</div>
+        <div class="result-num">4,777건</div>
+        <p>95개 언론사, 7개 키워드</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ 화면 구성 ━━━━━━━━━━━━━━ -->
+<section>
+  <div class="container">
+    <div class="section-label">Pages</div>
+    <h2>화면 구성</h2>
+    <p class="lead">4개의 핵심 페이지로 전체 워크플로우를 커버합니다.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>페이지</th><th>경로</th><th>주요 기능</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>대시보드</strong></td>
+            <td><code>/</code></td>
+            <td>오늘 수집량, High/Medium 건수, 적합도 도넛 차트, 사건 분야별 바 차트, 주간 추이 라인 차트</td>
+          </tr>
+          <tr>
+            <td><strong>분석 목록</strong></td>
+            <td><code>/analyses</code></td>
+            <td>케이스 단위 뷰, 적합도 분포 배지, 발행일/분석일/피해규모 정렬, 키워드 검색, 엑셀 다운로드</td>
+          </tr>
+          <tr>
+            <td><strong>케이스 상세</strong></td>
+            <td><code>/analyses/case/:id</code></td>
+            <td>소속 기사 목록, 기사별 AI 요약 + 판단 근거 펼치기/접기, 로앤굿 심사 결과 입력</td>
+          </tr>
+          <tr>
+            <td><strong>설정</strong></td>
+            <td><code>/settings</code></td>
+            <td>수집 키워드 관리, 언론사 활성화 관리</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ━━━━━━━━━━━━━━ 푸터 ━━━━━━━━━━━━━━ -->
+<footer>
+  <p>
+    <strong>LawNGood AI 법률 뉴스 분석 시스템</strong><br>
+    <br>
+    Django · React · PostgreSQL · Google Gemini 2.5 Flash · APScheduler<br>
+    <br>
+    Built for LawNGood · 2026
+  </p>
+</footer>
+
+</body>
+</html>
