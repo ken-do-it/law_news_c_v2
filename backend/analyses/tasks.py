@@ -16,11 +16,11 @@ from analyses.validators import validate_and_parse
 logger = logging.getLogger(__name__)
 
 # 유사도 매칭 임계값 — 낮을수록 다른 사건이 합쳐지는 false positive 증가
-CASE_SIMILARITY_THRESHOLD = 0.85
+CASE_SIMILARITY_THRESHOLD = 0.95
 
 # 제목 키워드 기반 그룹 매칭 — 공유 키워드 N개 이상이면 같은 사건 그룹으로 판단
 # 낮을수록 동일 토픽의 다른 사건이 합쳐질 위험 증가
-TITLE_KEYWORD_MATCH_COUNT = 4
+TITLE_KEYWORD_MATCH_COUNT = 5
 
 # 사건명에서 자주 등장하는 일반 법률/분류 용어 (유사도 매칭 시 제외)
 _CASE_STOPWORDS = {
