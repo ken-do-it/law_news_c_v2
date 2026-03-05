@@ -47,7 +47,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from articles.models import Article
-        from analyses.tasks import analyze_single_article
+        from analyses.tasks import DailyQuotaExceededError, analyze_single_article
 
         limit = options["limit"]
         qs = Article.objects.filter(
@@ -79,13 +79,23 @@ class Command(BaseCommand):
                 else:
                     failed += 1
                     tag = self.style.ERROR("✗")
+            except DailyQuotaExceededError as e:
+                elapsed_item = time.time() - t0
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"\n[{i:{pad}d}/{total}] API 일일 한도 초과 — 분석 중단 ({elapsed_item:.1f}s): {e}"
+                    )
+                )
+                self.stdout.write(
+                    self.style.WARNING("기사 상태는 pending 유지. 내일 다시 실행하세요.")
+                )
+                break
             except Exception as e:
                 article.status = "failed"
                 article.retry_count += 1
                 article.save(update_fields=["status", "retry_count"])
                 failed += 1
                 tag = self.style.ERROR("✗")
-                # 예외 메시지를 제목 뒤에 붙임
                 short_title = f"[오류: {str(e)[:40]}]"
                 elapsed_item = time.time() - t0
                 self.stdout.write(

@@ -232,7 +232,7 @@ just analyze --limit 100  # 100건만 분석
 | 영역 | 기술 |
 |------|------|
 | 백엔드 | Python 3.12, Django 5, Django REST Framework |
-| AI | Google Gemini 2.5 Flash (기본), OpenAI GPT-4o (폴백) |
+| AI | Google Gemini 2.5 Flash |
 | 프론트엔드 | React 19, TypeScript, Vite 7, Tailwind CSS 4 |
 | 차트 | Recharts 3 |
 | DB | PostgreSQL 16 (Docker) |
@@ -332,7 +332,7 @@ just analyze --limit 100  # 100건만 분석
 │   네이버 뉴스 API     │  │  Gemini 2.5 Flash    │
 │   (기사 수집)         │  │  (AI 분석 — 기본)     │
 │                      │  │                      │
-│  Client-Id/Secret    │  │  OpenAI GPT-4o (폴백) │
+│  Client-Id/Secret    │  │                      │
 └──────────────────────┘  └──────────────────────┘
 ```
 
@@ -366,8 +366,7 @@ just analyze --limit 100  # 100건만 분석
 | django-filter | 23.5+ | API 필터링 |
 | drf-spectacular | 0.27+ | Swagger API 문서 자동 생성 |
 | APScheduler | 3.x | 수집/분석 자동 스케줄링 (60분/5분) |
-| google-genai | 1.64+ | Gemini LLM 호출 (기본) |
-| OpenAI SDK | 1.0+ | GPT-4o LLM 호출 (폴백) |
+| google-genai | 1.64+ | Gemini LLM 호출 |
 | requests | 2.31+ | 네이버 API HTTP 호출 |
 | BeautifulSoup4 | 4.12+ | HTML 파싱 (기사 본문 추출) |
 | openpyxl | 3.1+ | 엑셀 파일 생성 |
@@ -417,7 +416,7 @@ law_news_c_v2/                    ← 프로젝트 루트
 │   ├── articles/                 ← 뉴스 기사 앱 (수집 담당)
 │   │   ├── models.py             ← 모델: MediaSource, Keyword, Article
 │   │   ├── crawlers.py           ← 네이버 뉴스 API 크롤러
-│   │   ├── tasks.py              ← crawl_news() Celery 태스크
+│   │   ├── tasks.py              ← crawl_news() 크롤링 태스크
 │   │   ├── serializers.py
 │   │   ├── views.py
 │   │   └── management/commands/
@@ -496,7 +495,6 @@ uv --version
 | 네이버 검색 API | 뉴스 기사 수집 | [developers.naver.com](https://developers.naver.com/apps/) |
 | Gemini API | AI 분석 (기본 LLM) | [aistudio.google.com](https://aistudio.google.com/apikey) |
 
-> OpenAI API 키는 선택사항입니다 (Gemini 실패 시 폴백용).
 
 ---
 
@@ -598,7 +596,7 @@ pending/analyzing 기사 순회
 프롬프트 구성 (시스템 + Few-shot 3건 + 기사 본문 3000자)
       │
       ▼
-Gemini 2.5 Flash 호출 → 실패 시 OpenAI GPT-4o
+Gemini 2.5 Flash 호출
       │
       ▼
 JSON 응답 파싱 + 검증
@@ -788,7 +786,6 @@ LLM 응답에서 case_name 추출
 | `NAVER_CLIENT_SECRET` | 네이버 API 시크릿 | — |
 | `GEMINI_API_KEY` | Gemini API 키 | — |
 | `GEMINI_MODEL` | Gemini 모델명 | `gemini-2.5-flash` |
-| `OPENAI_API_KEY` | OpenAI API 키 (선택) | — |
 | `LLM_TEMPERATURE` | LLM 응답 다양성 | `0.1` |
 | `LLM_MAX_TOKENS` | LLM 최대 응답 길이 | `8192` |
 | `CRAWL_INTERVAL_MINUTES` | 수집 주기 (분) | `60` |
@@ -799,8 +796,7 @@ LLM 응답에서 case_name 추출
 
 | 모델 | 비용 | 비고 |
 |------|------|------|
-| Gemini 2.5 Flash | 무료 티어 | 기본 LLM |
-| GPT-4o | 약 $0.007/건 (약 10원) | 폴백 (선택사항) |
+| Gemini 2.5 Flash | 무료 티어 | AI 분석 |
 
 ---
 

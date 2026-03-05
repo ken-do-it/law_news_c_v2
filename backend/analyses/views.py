@@ -372,19 +372,23 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             for c in cat_dist
         ]
 
-        # ── 7. 주간 추이 (최근 7일 라인차트 데이터) ──
+        # ── 7. 주간 추이 (최근 7일 라인차트 데이터) — 단일 aggregate 쿼리 ──
+        days = [today - timedelta(days=6 - i) for i in range(7)]
+        agg_kwargs = {}
+        for d in days:
+            k = d.isoformat().replace("-", "_")
+            agg_kwargs[f"total_{k}"] = Count("id", filter=Q(analyzed_at__date=d))
+            agg_kwargs[f"high_{k}"] = Count("id", filter=Q(analyzed_at__date=d, suitability="High"))
+            agg_kwargs[f"medium_{k}"] = Count("id", filter=Q(analyzed_at__date=d, suitability="Medium"))
+        agg = Analysis.objects.aggregate(**agg_kwargs)
         weekly_trend = []
-        for i in range(7):
-            # 6일 전부터 오늘까지 순서대로 반복
-            d = today - timedelta(days=6 - i)
-            total = Analysis.objects.filter(analyzed_at__date=d).count()
-            high = Analysis.objects.filter(analyzed_at__date=d, suitability="High").count()
-            medium = Analysis.objects.filter(analyzed_at__date=d, suitability="Medium").count()
+        for d in days:
+            k = d.isoformat().replace("-", "_")
             weekly_trend.append({
-                "date": d.isoformat(),  # "2026-02-16" 형식
-                "total": total,
-                "high": high,
-                "medium": medium,
+                "date": d.isoformat(),
+                "total": agg[f"total_{k}"],
+                "high": agg[f"high_{k}"],
+                "medium": agg[f"medium_{k}"],
             })
 
         # ── 8. 심사 현황 통계 (기사 단위 — 하위 호환) ──
