@@ -1,6 +1,7 @@
 # LawNGood — AI 법률 뉴스 분석 시스템
 
 > 법률 뉴스를 자동으로 수집하고, AI(Gemini 2.5 Flash)가 소송금융 가이드라인에 따라 소송금융 투자 적합도(High/Medium/Low)를 판정하는 시스템입니다.
+> 분석 결과는 대시보드, 엑셀(.xlsx), PDF 리포트로 확인할 수 있습니다.
 
 ---
 
@@ -208,8 +209,12 @@ just analyze --limit 100  # 100건만 분석
 2. just dev          ← 서버 실행 (이미 실행 중이면 생략)
    → APScheduler가 자동으로 수집(60분) + 분석(5분) 반복
 3. 브라우저에서 대시보드 확인  ← http://localhost:5173
+   → 분석 대기 배지: 대기 기사가 있으면 "● 분석 대기 N건" 황색 배지 표시
+   → Gemini API 한도 초과 시 오렌지 배너로 자동 안내
 4. "High" 사건 확인   ← 분석 목록에서 적합도 필터링
 5. 엑셀 다운로드 (필요 시)  ← 분석 목록 우측 상단 버튼
+6. PDF 리포트 다운로드 (필요 시)  ← 분석 목록 우측 상단 "PDF 리포트" 버튼
+   → 주간/월간 선택 가능, 케이스 기준 중복 제거, 3개 섹션 구성
 ```
 
 ---
@@ -237,6 +242,8 @@ just analyze --limit 100  # 100건만 분석
 | 차트 | Recharts 3 |
 | DB | PostgreSQL 16 (Docker) |
 | 스케줄링 | APScheduler (수집 60분 / 분석 5분 주기) |
+| 내보내기 | openpyxl (엑셀), fpdf2 (PDF 리포트) |
+| 캐시 | Django FileBasedCache (Gemini quota 상태 공유) |
 | 도구 | uv, bun, just |
 
 ---
@@ -370,6 +377,7 @@ just analyze --limit 100  # 100건만 분석
 | requests | 2.31+ | 네이버 API HTTP 호출 |
 | BeautifulSoup4 | 4.12+ | HTML 파싱 (기사 본문 추출) |
 | openpyxl | 3.1+ | 엑셀 파일 생성 |
+| fpdf2 | 2.x | PDF 리포트 생성 (맑은 고딕 한글 폰트) |
 | psycopg | 3.x | PostgreSQL 드라이버 |
 
 ### 프론트엔드
@@ -427,13 +435,14 @@ law_news_c_v2/                    ← 프로젝트 루트
 │   │   ├── models.py             ← 모델: CaseGroup, Analysis
 │   │   ├── prompts.py            ← LLM 프롬프트 + Few-shot 예시
 │   │   ├── validators.py         ← LLM 응답 JSON 검증
-│   │   ├── tasks.py              ← analyze_single_article() + Case 그룹핑 로직
-│   │   ├── export.py             ← 엑셀 내보내기
+│   │   ├── tasks.py              ← analyze_single_article() + Case 그룹핑 + quota 캐시
+│   │   ├── export.py             ← 엑셀/PDF 내보내기 (케이스 기준 중복 제거)
 │   │   ├── serializers.py
 │   │   ├── views.py
 │   │   └── management/commands/
-│   │       ├── run_analysis.py   ← just analyze (bulk 재분석)
-│   │       └── regroup_analyses.py
+│   │       ├── run_analysis.py        ← just analyze (bulk 재분석)
+│   │       ├── regroup_analyses.py
+│   │       └── reparse_numeric_fields.py  ← 피해규모/피해자수 숫자 필드 재파싱
 │   │
 │   └── scheduler/                ← APScheduler 앱
 │       ├── apps.py               ← 웹 서버 실행 시에만 스케줄러 시작 (관리 명령어에서는 미시작)
@@ -731,6 +740,7 @@ LLM 응답에서 case_name 추출
 | GET | `/api/analyses/{id}/` | 분석 결과 상세 |
 | GET | `/api/analyses/stats/` | 대시보드 통계 |
 | GET | `/api/analyses/export/` | 엑셀 다운로드 |
+| GET | `/api/analyses/export_pdf/` | PDF 리포트 다운로드 (`?period=weekly\|monthly`) |
 | PATCH | `/api/analyses/{id}/review/` | 심사 결과 저장 |
 | GET | `/api/case-groups/` | 사건 그룹 목록 |
 | GET | `/api/case-groups/{case_id}/` | 사건 그룹 상세 |
@@ -739,6 +749,20 @@ LLM 응답에서 case_name 추출
 | GET | `/api/keywords/` | 키워드 목록 |
 | POST | `/api/keywords/` | 키워드 추가 |
 | GET | `/api/docs/` | Swagger API 문서 |
+
+### 대시보드 통계 (`/api/analyses/stats/`) 주요 필드
+
+| 필드 | 설명 |
+|------|------|
+| `today_collected` | 오늘 수집된 기사 수 |
+| `pending_count` | 분석 대기 기사 수 (pending + analyzing) |
+| `total_analyzed` | 전체 분석 완료 건수 |
+| `high_cases` | High 기사가 1건 이상인 케이스 수 (케이스 기준) |
+| `medium_cases` | High 없이 Medium만 있는 케이스 수 (케이스 기준) |
+| `total_cases` | 전체 사건 수 |
+| `total_reviewed_cases` | 심사 완료 케이스 수 |
+| `total_accepted_cases` | 심사 통과 케이스 수 |
+| `scheduler_state` | 스케줄러 상태 (next_run_at, quota_error 등) |
 
 ### 분석 목록 주요 파라미터
 
@@ -765,11 +789,27 @@ LLM 응답에서 case_name 추출
 /settings              → Settings      (키워드 관리)
 ```
 
+### 대시보드 (Dashboard)
+
+- **AI 분석 현황 KPI** (5개 카드):
+  - 오늘 수집 / 분석 대기 / 분석 완료 / High 적합 / Medium 적합
+  - High·Medium 적합 카드는 **케이스 기준 수** (큰 숫자) + 기사 수 (작은 보조 텍스트) 표시
+- **분석 대기 배지**: 대기 기사가 있고 분석 중이 아닐 때 "● 분석 대기 N건" 황색 배지 표시 (animate-pulse)
+- **Gemini API 한도 초과 배너**: 일일/분당 한도 초과 시 오렌지 배너 자동 표시
+  - CLI(`just analyze`)와 웹 서버 양쪽에서 감지 → 파일 기반 캐시로 공유 (`backend/.cache/`)
+  - 다음 분석 성공 시 자동 해제
+
 ### 케이스 상세 (CaseDetail)
 
 - 케이스 소속 기사 목록 + 적합도 분포 표시
-- 기사 클릭 시 AI 요약 + 판단 근거 펼치기/접기
+- 기사 클릭 시 AI 요약 + 판단 근거 펼치기/접기 (선택된 기사 하이라이트 링 표시)
 - 로앤굿 심사 기능 (client_suitability, accepted)
+
+### 분석 목록 (AnalysisList)
+
+- 케이스 단위 뷰 (동일 케이스 기사 수 표시)
+- 피해자 수 / 피해규모 컬럼 독립 다중 정렬 지원
+- 엑셀(.xlsx) 및 PDF 리포트 다운로드 버튼
 
 ---
 
@@ -830,6 +870,32 @@ just regroup --all        # 전체 재매칭
 just regroup --dry-run    # 미리보기 (실제 변경 없음)
 ```
 
+### 숫자 필드 재파싱
+
+피해 규모·피해자 수의 숫자 추출 로직이 개선된 경우 기존 데이터를 재계산합니다:
+
+```powershell
+uv run python backend/manage.py reparse_numeric_fields           # 전체 재파싱
+uv run python backend/manage.py reparse_numeric_fields --null-only  # None인 것만
+```
+
+### PDF 리포트
+
+분석 목록 우측 상단 **"PDF 리포트"** 버튼 또는 API로 다운로드:
+
+```
+GET /api/analyses/export_pdf/?period=weekly   # 주간 (최근 7일)
+GET /api/analyses/export_pdf/?period=monthly  # 월간 (이번 달)
+```
+
+리포트 구성:
+- **표지**: 기간, 생성일, 5개 통계 박스 (대상 케이스 / High 적합 / Medium 적합 / 심사 완료 / 심사 통과) — 모두 케이스 기준
+- **섹션 1**: 전체 분석 결과 (케이스 기준, 고적합도 대표 기사 1건/케이스)
+- **섹션 2**: 심사 완료 목록 (케이스 기준)
+- **섹션 3**: 심사 통과 목록 (케이스 기준)
+
+> 동일 케이스에 기사가 여러 개여도 적합도가 가장 높은 기사 1건만 표시됩니다.
+
 ---
 
 ## 14. 트러블슈팅
@@ -841,6 +907,8 @@ just regroup --dry-run    # 미리보기 (실제 변경 없음)
 | 서버 시작 오류 | 의존성/마이그레이션 문제 | `just install` → `just migrate` |
 | 크롤링 0건 수집 | 네이버 API 키 오류 | `.env` `NAVER_CLIENT_ID/SECRET` 확인 |
 | AI 분석 실패 | Gemini API 키 오류 | `.env` `GEMINI_API_KEY` 확인 |
+| **오렌지 배너 "Gemini 일일 요청 한도 초과"** | Gemini 무료 티어 일일 한도 소진 | 다음날 오전 9시(KST) 이후 자동 재개. 즉시 해제하려면 `backend/.cache/` 폴더 삭제 후 서버 재시작 |
+| **오렌지 배너 "Gemini 분당 요청 한도 초과"** | API 분당 RPM 초과 | 5분 후 `just analyze` 재실행 시 자동 해제 |
 | Windows 한글 인코딩 오류 | cp949 인코딩 충돌 | `$env:PYTHONIOENCODING="utf-8"` 설정 후 재실행 |
 | 포트 충돌 | 5173 사용 중 | Vite가 자동으로 다음 포트 선택 — 터미널 확인 |
 

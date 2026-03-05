@@ -124,11 +124,13 @@ function KpiCard({
   label,
   value,
   sub,
+  sub2,
   accent,
 }: {
   label: string;
   value: string | number;
   sub?: string;
+  sub2?: string;
   accent: string;
 }) {
   return (
@@ -141,6 +143,7 @@ function KpiCard({
         <div className="text-xs text-gray-400 font-medium">{label}</div>
         <div className="text-2xl font-bold mt-1.5 leading-none text-gray-900">{value}</div>
         {sub && <div className="text-xs text-gray-400 mt-1.5">{sub}</div>}
+        {sub2 && <div className="text-[11px] text-gray-300 mt-0.5">{sub2}</div>}
       </div>
     </div>
   );
@@ -201,8 +204,6 @@ export default function Dashboard() {
   const total = stats.total_analyzed;
   const highCount = stats.suitability_distribution.find((d) => d.name === 'High')?.value ?? 0;
   const mediumCount = stats.suitability_distribution.find((d) => d.name === 'Medium')?.value ?? 0;
-  const highPct = total ? Math.round((highCount / total) * 100) : 0;
-  const mediumPct = total ? Math.round((mediumCount / total) * 100) : 0;
   const reviewedPct = total ? Math.round((stats.total_reviewed / total) * 100) : 0;
 
   const weeklyData = stats.weekly_trend.map((d) => ({ ...d, date: formatDateShort(d.date) }));
@@ -345,14 +346,16 @@ export default function Dashboard() {
           />
           <KpiCard
             label="High 적합"
-            value={highCount.toLocaleString()}
-            sub={`전체의 ${highPct}%`}
+            value={stats.high_cases.toLocaleString()}
+            sub="케이스 아이디 기준"
+            sub2={`기사 ${highCount.toLocaleString()}건`}
             accent="#E11D48"
           />
           <KpiCard
             label="Medium 적합"
-            value={mediumCount.toLocaleString()}
-            sub={`전체의 ${mediumPct}%`}
+            value={stats.medium_cases.toLocaleString()}
+            sub="케이스 아이디 기준"
+            sub2={`기사 ${mediumCount.toLocaleString()}건`}
             accent="#D97706"
           />
         </div>
