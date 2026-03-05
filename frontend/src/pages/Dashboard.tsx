@@ -13,6 +13,15 @@ function SchedulerBanner({ state }: { state: SchedulerState | null }) {
   if (!state) return null;
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+
+  if (state.quota_error) {
+    return (
+      <div className="flex items-center gap-2 bg-orange-50 border border-orange-300 rounded-lg px-4 py-2.5 text-sm text-orange-700">
+        <span>⚠️</span>
+        <span className="font-medium">{state.quota_error}</span>
+      </div>
+    );
+  }
   if (state.is_running) {
     return (
       <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-sm text-blue-700">

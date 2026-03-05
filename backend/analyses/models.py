@@ -18,7 +18,7 @@ class CaseGroup(models.Model):
         unique=True,
         help_text="예: 2026-02-001",
     )
-    name = models.CharField("사건명", max_length=200, help_text="예: 쿠팡 개인정보 유출")
+    name = models.CharField("사건명", max_length=200, db_index=True, help_text="예: 쿠팡 개인정보 유출")
     description = models.TextField("사건 설명", blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -167,7 +167,7 @@ class Analysis(models.Model):
     )
 
     # LLM 메타 정보
-    llm_model = models.CharField("사용 모델", max_length=50, default="gpt-4o")
+    llm_model = models.CharField("사용 모델", max_length=50, default="gemini-2.5-flash")
     prompt_tokens = models.IntegerField("프롬프트 토큰", default=0)
     completion_tokens = models.IntegerField("응답 토큰", default=0)
     analyzed_at = models.DateTimeField("분석 시각", auto_now_add=True)

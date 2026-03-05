@@ -1,11 +1,10 @@
-"""LLM 분석 Celery 태스크"""
+"""LLM 분석 태스크"""
 
 import logging
 import re
 from difflib import SequenceMatcher
 
 from articles.models import Article
-from celery import shared_task
 from django.conf import settings
 from django.db.models import Count, Q
 
@@ -16,7 +15,17 @@ from analyses.validators import validate_and_parse
 logger = logging.getLogger(__name__)
 
 # 유사도 매칭 임계값 — 낮을수록 다른 사건이 합쳐지는 false positive 증가
-CASE_SIMILARITY_THRESHOLD = 0.95
+CASE_SIMILARITY_THRESHOLD = 0.85
+
+
+class DailyQuotaExceededError(Exception):
+    """Gemini 일일 요청 한도 초과 — 다음 날 자정(UTC) 이후 초기화"""
+    pass
+
+
+def _is_any_quota_error(e: Exception) -> bool:
+    """429 rate limit 에러 감지 (일일 한도 및 분당 한도 모두 포함)"""
+    return "RESOURCE_EXHAUSTED" in str(e)
 
 # 제목 키워드 기반 그룹 매칭 — 공유 키워드 N개 이상이면 같은 사건 그룹으로 판단
 # 낮을수록 동일 토픽의 다른 사건이 합쳐질 위험 증가
@@ -206,27 +215,6 @@ def parse_victim_count(text: str) -> int | None:
         return None
 
 
-def call_openai(messages: list[dict]) -> tuple[str, int, int]:
-    """OpenAI GPT-4o API 호출 → (응답텍스트, prompt_tokens, completion_tokens)"""
-    from openai import OpenAI
-
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model=settings.LLM_MODEL,
-        messages=messages,  # type: ignore[arg-type]
-        temperature=settings.LLM_TEMPERATURE,
-        max_tokens=settings.LLM_MAX_TOKENS,
-        response_format={"type": "json_object"},
-    )
-    choice = response.choices[0]
-    usage = response.usage
-    return (
-        choice.message.content or "",
-        usage.prompt_tokens if usage else 0,
-        usage.completion_tokens if usage else 0,
-    )
-
-
 def call_gemini(messages: list[dict]) -> tuple[str, int, int]:
     """Gemini API 호출 (기본 LLM) — google-genai SDK"""
     from google import genai
@@ -336,26 +324,28 @@ def find_or_create_case_group(
     if existing:
         return existing
 
-    # 모든 그룹 한 번에 로드 (이후 단계에서 재사용)
-    all_groups = list(CaseGroup.objects.all())
+    # id, name만 로드 (full object 불필요 — 이후 단계에서 재사용)
+    all_groups = list(CaseGroup.objects.values("id", "name"))
 
     # 2) case_name 유사도 매칭
-    best_match = None
+    best_match_id = None
+    best_match_name = None
     best_ratio = 0.0
     for group in all_groups:
-        ratio = _case_similarity(case_name, group.name)
+        ratio = _case_similarity(case_name, group["name"])
         if ratio > best_ratio:
             best_ratio = ratio
-            best_match = group
+            best_match_id = group["id"]
+            best_match_name = group["name"]
 
-    if best_match and best_ratio >= CASE_SIMILARITY_THRESHOLD:
+    if best_match_id and best_ratio >= CASE_SIMILARITY_THRESHOLD:
         logger.info(
             "사건 그룹 유사도 매칭: '%s' → '%s' (%.2f)",
             case_name,
-            best_match.name,
+            best_match_name,
             best_ratio,
         )
-        return best_match
+        return CaseGroup.objects.get(id=best_match_id)
 
     # 3) 기사 제목 키워드 겹침 매칭 (fallback)
     #    같은 사건을 다른 언론사가 다른 각도로 보도할 때
@@ -381,8 +371,7 @@ def find_or_create_case_group(
                 .values("article__title")[:1]
             )
             groups_with_titles = (
-                CaseGroup.objects.filter(id__in=[g.id for g in all_groups])
-                .annotate(latest_title=Subquery(latest_titles))
+                CaseGroup.objects.annotate(latest_title=Subquery(latest_titles))
                 .values("id", "name", "latest_title")
             )
 
@@ -430,41 +419,25 @@ def analyze_single_article(article: Article) -> bool:
     existing_case_names = get_existing_case_names()
     messages = build_messages(article.title, article.content, existing_case_names)
 
-    # Gemini 우선, OpenAI 폴백
-    has_gemini = bool(getattr(settings, "GEMINI_API_KEY", ""))
-    has_openai = bool(getattr(settings, "OPENAI_API_KEY", ""))
-
-    if has_gemini:
-        primary, fallback = call_gemini, (call_openai if has_openai else None)
-        primary_name, fallback_name = "Gemini", "OpenAI"
-    elif has_openai:
-        primary, fallback = call_openai, None
-        primary_name, fallback_name = "OpenAI", None
-    else:
-        logger.error("LLM API 키가 설정되지 않음 (OPENAI_API_KEY 또는 GEMINI_API_KEY)")
+    if not getattr(settings, "GEMINI_API_KEY", ""):
+        logger.error("GEMINI_API_KEY가 설정되지 않음")
         article.status = "failed"
         article.retry_count += 1
         article.save(update_fields=["status", "retry_count"])
         return False
 
     try:
-        raw_response, prompt_tokens, completion_tokens = primary(messages)
-    except Exception:
-        logger.exception("%s API 호출 실패: article=%d", primary_name, article.pk)
-        if fallback:
-            try:
-                raw_response, prompt_tokens, completion_tokens = fallback(messages)
-            except Exception:
-                logger.exception("%s API도 실패: article=%d", fallback_name, article.pk)
-                article.status = "failed"
-                article.retry_count += 1
-                article.save(update_fields=["status", "retry_count"])
-                return False
-        else:
-            article.status = "failed"
-            article.retry_count += 1
-            article.save(update_fields=["status", "retry_count"])
-            return False
+        raw_response, prompt_tokens, completion_tokens = call_gemini(messages)
+    except Exception as e:
+        if _is_any_quota_error(e):
+            article.status = "pending"
+            article.save(update_fields=["status"])
+            raise DailyQuotaExceededError(str(e)) from e
+        logger.exception("Gemini API 호출 실패: article=%d", article.pk)
+        article.status = "failed"
+        article.retry_count += 1
+        article.save(update_fields=["status", "retry_count"])
+        return False
 
     parsed = validate_and_parse(raw_response)
     if not parsed:
@@ -479,8 +452,6 @@ def analyze_single_article(article: Article) -> bool:
         article_title=article.title,
         article_date=article.published_at.date(),
     )
-
-    used_model = settings.GEMINI_MODEL if primary == call_gemini else settings.LLM_MODEL
 
     damage_amount_text = parsed.get("damage_amount", "미상")
     victim_count_text = parsed.get("victim_count", "미상")
@@ -501,7 +472,7 @@ def analyze_single_article(article: Article) -> bool:
             stage_detail=parsed.get("stage_detail", ""),
             summary=parsed["summary"],
             is_relevant=parsed.get("is_relevant", True),
-            llm_model=used_model,
+            llm_model=settings.GEMINI_MODEL,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
         ),
@@ -512,8 +483,7 @@ def analyze_single_article(article: Article) -> bool:
     return True
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def analyze_pending_articles(self):
+def analyze_pending_articles():
     """분석 대기(pending/analyzing) 상태의 기사를 일괄 분석"""
     pending = Article.objects.filter(status__in=["pending", "analyzing"]).order_by(
         "collected_at"
@@ -532,8 +502,7 @@ def analyze_pending_articles(self):
     return {"total": total, "success": success, "failed": failed}
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def reanalyze_article(self, article_id: int):
+def reanalyze_article(article_id: int):
     """특정 기사 재분석"""
     try:
         article = Article.objects.get(pk=article_id)

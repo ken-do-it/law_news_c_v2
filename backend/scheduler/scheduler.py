@@ -17,6 +17,7 @@ _analyze_lock = threading.Lock()
 _state: dict = {
     "is_running": False,       # 분석 잡 실행 중 여부 (대시보드 표시용)
     "last_run_at": None,       # 마지막 분석 완료 시각
+    "quota_error": None,       # 일일 한도 초과 안내 메시지 (None이면 정상)
 }
 
 _scheduler = None
@@ -76,9 +77,18 @@ def _run_analyze() -> None:
                 ok = analyze_single_article(article)
                 if ok:
                     success += 1
+                    _state["quota_error"] = None  # 성공하면 에러 상태 해제
                 else:
                     failed += 1
             except Exception as e:
+                from analyses.tasks import DailyQuotaExceededError, _is_daily_quota_error
+                if isinstance(e, DailyQuotaExceededError):
+                    if _is_daily_quota_error(e):
+                        _state["quota_error"] = "Gemini 일일 요청 한도 초과 — 내일 오전 9시(KST) 이후 자동 재개됩니다."
+                    else:
+                        _state["quota_error"] = "Gemini API 분당 요청 한도 초과 — 5분 후 자동 재개됩니다."
+                    logger.warning("API 한도 초과 — 분석 중단: %s", _state["quota_error"])
+                    break
                 article.status = "failed"
                 article.retry_count += 1
                 article.save(update_fields=["status", "retry_count"])
@@ -187,4 +197,5 @@ def get_scheduler_state() -> dict:
         "is_running": _state["is_running"],
         "last_run_at": _state["last_run_at"],
         "next_run_at": next_run_at,
+        "quota_error": _state.get("quota_error"),
     }

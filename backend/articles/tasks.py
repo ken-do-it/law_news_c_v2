@@ -1,9 +1,8 @@
-"""크롤링 Celery 태스크"""
+"""크롤링 태스크"""
 
 import logging
 from difflib import SequenceMatcher
 
-from celery import shared_task
 from django.db import IntegrityError
 
 # 같은 날 발행된 기사 중 제목 유사도가 이 값 이상이면 중복으로 판단하여 스킵
@@ -41,11 +40,12 @@ def _resolve_source(original_link: str, naver_link: str) -> MediaSource | None:
     return None
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def crawl_news(self):
+def crawl_news():
     """활성화된 키워드로 네이버 뉴스를 검색하고 DB에 저장"""
     keywords = Keyword.objects.filter(is_active=True)
     total_new = 0
+    # 날짜별 제목 캐시 — 같은 날 중복 제목 DB 조회를 1회로 줄임
+    _title_cache: dict = {}
 
     for keyword in keywords:
         items = search_naver_news(keyword.word)
@@ -72,12 +72,15 @@ def crawl_news(self):
             # 같은 날 거의 동일한 제목 중복 스킵
             # (같은 기사가 네이버 뉴스 URL과 원본 URL 두 가지로 수집될 때 방지)
             pub_date_only = pub_date.date() if hasattr(pub_date, "date") else pub_date
-            same_day_titles = Article.objects.filter(
-                published_at__date=pub_date_only
-            ).values_list("title", flat=True)
+            if pub_date_only not in _title_cache:
+                _title_cache[pub_date_only] = list(
+                    Article.objects.filter(
+                        published_at__date=pub_date_only
+                    ).values_list("title", flat=True)
+                )
             if any(
                 SequenceMatcher(None, title, t).ratio() >= TITLE_DEDUP_THRESHOLD
-                for t in same_day_titles
+                for t in _title_cache[pub_date_only]
             ):
                 logger.debug("유사 제목 중복 스킵: '%s'", title[:60])
                 continue
@@ -102,6 +105,7 @@ def crawl_news(self):
                     status="pending",
                 )
                 ArticleKeyword.objects.create(article=article, keyword=keyword)
+                _title_cache[pub_date_only].append(title)
                 total_new += 1
             except IntegrityError:
                 continue

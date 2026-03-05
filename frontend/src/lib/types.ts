@@ -94,6 +94,7 @@ export interface SchedulerState {
   is_running: boolean;
   last_run_at: string | null;
   next_run_at: string | null;
+  quota_error: string | null;
 }
 
 export interface DashboardStats {
