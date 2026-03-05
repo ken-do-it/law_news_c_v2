@@ -1,6 +1,6 @@
 # LawNGood — 기능 명세서 (Functional Specification)
 
-> 버전: v2.2 | 작성일: 2026-02-27 | 기반 코드: law_news_c_v2
+> 버전: v2.3 | 최종 수정: 2026-03-05 | 기반 코드: law_news_c_v2
 >
 > 이 문서는 `backend/` 디렉토리 내 Django 앱별 모델, API, 비즈니스 로직과 프론트엔드 명세를 통합 기술합니다.
 
@@ -58,12 +58,12 @@ crawl_news()
 - 신규 `Article` 레코드 (status='pending')
 - 중복 URL → 스킵 (기존 레코드 유지)
 
-### 태스크 변형
+### 실행 방법
 
-| 함수 | 설명 |
+| 방법 | 설명 |
 |------|------|
-| `crawl_news()` | Celery 태스크. 활성 키워드 순회 → `search_naver_news()` 호출 → URL 중복 체크 후 신규만 저장. 완료 후 `analyze_pending_articles.delay()` 자동 트리거 (Redis 필요) |
-| `crawl_news_sync()` | 동기 실행 래퍼. Celery 없이 직접 호출. `just crawl` 명령에서 사용 |
+| `just crawl` | `manage.py crawl_news` 호출 — 스케줄러 미시작, 단독 수집 |
+| APScheduler (자동) | 서버 실행 시 60분마다 `crawl_news()` 자동 호출 |
 
 ### 예외 처리
 
@@ -78,38 +78,23 @@ crawl_news()
 
 ## FS-002. 자동 스케줄러
 
-**모듈**: `backend/articles/services/scheduler.py`
+**모듈**: `backend/scheduler/scheduler.py`, `backend/scheduler/apps.py`
 
-### 동작 조건 (모두 충족 시 활성화)
+### 동작 조건
 
-```python
-1. ENABLE_PIPELINE_ON_RUNSERVER=True  (환경변수)
-2. os.environ.get('RUN_MAIN') == 'true'  (runserver 메인 프로세스)
-3. Django AppConfig.ready() 완료 이후
-```
+- `manage.py runserver` 실행 시 `SchedulerConfig.ready()`에서 자동 시작
+- 관리 명령어(`shell`, `crawl_news`, `run_analysis` 등) 실행 시 **미시작** (충돌 방지)
+- WSGI/ASGI 서버 사용 시 `DJANGO_SCHEDULER_ENABLED=1` 환경변수로 명시 활성화
 
-### 스케줄 설정
+### 잡 구성 (두 잡 독립 실행)
 
-```python
-scheduler.add_job(
-    _run_pipeline_job,
-    trigger='interval',
-    minutes=PIPELINE_INTERVAL_MINUTES,    # 기본: 60분
-    next_run_time=now() + timedelta(seconds=30),  # 최초 30초 후
-    max_instances=1,   # 동시 실행 방지
-    coalesce=True,     # 밀린 실행은 1회로 합산
-    id='pipeline_job',
-    replace_existing=True
-)
-```
+| 잡 ID | 함수 | 최초 실행 | 재실행 주기 |
+|-------|------|---------|-----------|
+| `crawl` | `_run_crawl()` | 서버 시작 10초 후 | 60분 (`CRAWL_INTERVAL_MINUTES`) |
+| `analyze` | `_run_analyze()` | 서버 시작 15초 후 | 5분 (`ANALYSIS_INTERVAL_MINUTES`) |
 
-### 파이프라인 작업 순서
-
-```
-_run_pipeline_job()
-  1. crawl_news()            → 뉴스 수집
-  2. (crawl_news 내부에서) analyze_pending_articles()  → AI 분석
-```
+- 잡 완료 후 `add_job(replace_existing=True)`으로 다음 실행 재등록 (DateTrigger one-shot 방식)
+- 각 잡은 threading.Lock으로 동시 실행 방지
 
 ---
 
@@ -1066,7 +1051,346 @@ App (React Router)
 
 | 버전 | 날짜 | 내용 |
 |------|------|------|
+| v2.3 | 2026-03-05 | 스케줄러-관리명령어 충돌 수정, `crawl_news` management command 신규, CLI 출력 개선 |
 | v2.2 | 2026-02-27 | 기능명세서.md 내용 통합 (모델 상세, config, 크롤러, ERD, 시리얼라이저 등) |
 | v2.1 | 2026-02-24 | 초안 작성 (현재 코드베이스 기반) |
 | v2.0 | - | Gemini로 LLM 교체, 동기 파이프라인 도입, is_relevant 필드 추가 |
 | v1.0 | - | OpenAI GPT-4o, Celery 기반 초기 버전 |
+
+---
+
+## 개발 트러블슈팅 이력
+
+> 구현 과정에서 발생한 실제 버그와 설계 변경 이력입니다.
+> "원래 이렇게 만들었는데, 이런 문제가 생겨서, 이렇게 바꿨다"를 코드 레벨로 기록합니다.
+
+---
+
+### TS-001. SQLite 동시 쓰기 잠금 → PostgreSQL 전환
+
+**발생 시점**: v2.0 APScheduler 도입 직후
+
+**원래 구현**
+
+```python
+# settings.py
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
+```
+
+**증상**
+
+APScheduler가 백그라운드 스레드에서 `analyze_single_article()`을 실행하는 동안,
+Django dev 서버가 `/api/analyses/` 요청을 처리하면 아래 에러가 반복 발생:
+
+```
+django.db.utils.OperationalError: database is locked
+```
+
+**원인 분석**
+
+SQLite는 동시 쓰기(Concurrent Write)를 지원하지 않는다.
+파일 레벨 락(WAL 모드에서도 단일 writer)이기 때문에, 분석 스레드가
+`Article.status = "analyzing"`으로 쓰는 순간 웹 요청 스레드의 쓰기가 차단된다.
+
+**해결**
+
+```python
+# settings.py — DATABASE_URL 파싱 직접 구현 (dj-database-url 라이브러리 없이)
+import os, urllib.parse
+
+_db_url = os.environ.get("DATABASE_URL", "")
+if _db_url.startswith("postgresql"):
+    _r = urllib.parse.urlparse(_db_url)
+    DATABASES = {"default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": _r.path.lstrip("/"),
+        "USER": _r.username, "PASSWORD": _r.password,
+        "HOST": _r.hostname, "PORT": _r.port or 5432,
+    }}
+```
+
+Docker Compose로 PostgreSQL 16-alpine 컨테이너 구성:
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: law_news
+      POSTGRES_PASSWORD: postgres
+    ports: ["5432:5432"]
+```
+
+기존 SQLite 데이터 이전:
+```python
+# 데이터 덤프 (SQLite에서)
+uv run python manage.py dumpdata --natural-foreign > backup.json
+# PostgreSQL로 로드
+uv run python manage.py loaddata backup.json
+```
+
+**교훈**
+
+멀티스레드 환경(APScheduler + Django dev server)에서는 처음부터 PostgreSQL을 사용해야 한다.
+"개발은 SQLite, 운영은 PostgreSQL"은 동시 I/O가 있는 순간 유지 불가능한 전략이다.
+
+---
+
+### TS-002. APScheduler 단일 파이프라인 잡 → 수집/분석 독립 분리
+
+**발생 시점**: v2.0 초기 스케줄러 구현 후
+
+**원래 구현**
+
+```python
+# 수집 + 분석을 하나의 잡으로 묶음
+def _run_pipeline_job():
+    crawl_news()          # 수집 (수 분 소요)
+    analyze_pending()     # 분석 (수십 분 소요)
+
+scheduler.add_job(
+    _run_pipeline_job,
+    trigger="interval",
+    minutes=60,
+)
+```
+
+**증상 / 문제**
+
+1. 분석이 오래 걸릴수록 다음 수집 시작이 지연됨 (블로킹 구조)
+2. 수집 직후 새 기사가 쌓이는데 분석은 60분 후에야 다시 시작 → 대기 기사 누적
+3. 분석 잡 실행 중 수집 잡이 또 시작되면 동일 기사를 두 스레드가 `analyzing`으로 변경 시도
+
+**해결**
+
+```python
+# scheduler.py — 두 잡 독립 분리
+_crawl_lock = threading.Lock()
+_analyze_lock = threading.Lock()
+
+def _run_crawl():
+    if not _crawl_lock.acquire(blocking=False):
+        return  # 이미 실행 중이면 스킵
+    try:
+        crawl_news()
+    finally:
+        _crawl_lock.release()
+        _reschedule("crawl", 60)  # 완료 후 다음 실행 재등록
+
+def _run_analyze():
+    if not _analyze_lock.acquire(blocking=False):
+        return
+    try:
+        for article in Article.objects.filter(status="pending"):
+            analyze_single_article(article)
+    finally:
+        _analyze_lock.release()
+        _reschedule("analyze", 5)
+
+# 각각 독립 잡으로 등록
+scheduler.add_job(_run_crawl,   trigger=DateTrigger(...+10s), id="crawl")
+scheduler.add_job(_run_analyze, trigger=DateTrigger(...+15s), id="analyze")
+```
+
+**교훈**
+
+수집 주기(60분)와 분석 주기(5분)는 본질적으로 다르다. 처음부터 분리하는 것이 맞다.
+Lock을 잡이 아닌 함수 레벨에 두면 스케줄러가 중복 실행을 트리거해도 안전하다.
+
+---
+
+### TS-003. APScheduler DateTrigger 잡 재예약 버그
+
+**발생 시점**: TS-002 독립 잡 분리 직후
+
+**원래 구현**
+
+```python
+def _reschedule(job_id: str, minutes: int):
+    next_run = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    _scheduler.reschedule_job(job_id, trigger=DateTrigger(run_date=next_run))
+```
+
+**증상**
+
+서버 로그에 매 잡 완료마다 아래 에러 출력:
+
+```
+analyze 재예약 실패: 'No job by the id of analyze was found'
+```
+
+**원인 분석**
+
+`DateTrigger`는 **one-shot trigger**다. 지정 시각에 한 번 실행되면 APScheduler가
+해당 잡을 스케줄러 내부 목록에서 **자동 삭제**한다.
+`reschedule_job()`은 기존 잡의 트리거를 교체하는 함수인데,
+잡이 이미 삭제된 상태에서 호출하면 `JobLookupError`가 발생한다.
+
+**해결**
+
+```python
+def _reschedule(job_id: str, minutes: int):
+    """DateTrigger 잡은 실행 후 자동 삭제되므로 add_job으로 재등록"""
+    next_run = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    job_func = _run_crawl if job_id == "crawl" else _run_analyze
+    _scheduler.add_job(
+        job_func,
+        trigger=DateTrigger(run_date=next_run),
+        id=job_id,
+        replace_existing=True,  # 혹시 남아있는 잡도 교체
+        max_instances=1,
+    )
+```
+
+**교훈**
+
+`IntervalTrigger`와 `DateTrigger`의 동작이 다르다.
+`IntervalTrigger`는 잡을 유지하며 반복 실행하지만,
+`DateTrigger`는 one-shot이라 실행 후 잡이 사라진다.
+"완료 후 N분 뒤 재실행" 패턴에서는 `IntervalTrigger` 대신 이 방식이 더 명시적이다.
+
+---
+
+### TS-004. `just crawl` 스케줄러 충돌 → management command 분리
+
+**발생 시점**: v2.3 운영 중
+
+**원래 구현**
+
+```python
+# justfile
+crawl:
+    {{manage}} shell -c "from articles.tasks import crawl_news_sync; n = crawl_news_sync(); print(f'수집 완료: {n}건')"
+```
+
+```python
+# articles/tasks.py
+@shared_task
+def crawl_news_sync():
+    """동기식 크롤링 (테스트/수동 실행용) — Celery 없이 직접 호출"""
+    return crawl_news()
+```
+
+**증상**
+
+`just crawl` 실행 시 아래 두 가지 문제 동시 발생:
+
+```
+analyze 재예약 실패: 'No job by the id of analyze was found'
+
+object type name: KeyboardInterrupt
+lost sys.stderr
+```
+
+**원인 분석**
+
+`manage.py shell -c "..."` 실행 시 Django가 로드되면서 `AppConfig.ready()` → `start_scheduler()` 호출.
+스케줄러가 백그라운드에서 10초 후 `crawl` 잡, 15초 후 `analyze` 잡을 실행 예약.
+동시에 shell 커맨드도 `crawl_news_sync()`를 직접 호출 → **이중 수집 실행**.
+
+크롤링 중 `extract_source_from_naver_page()`가 HTTP 요청을 보내는 C 레이어에서
+인터럽트가 발생하면 Python이 정상적으로 예외를 처리하지 못하고 `lost sys.stderr` 발생.
+
+`analyze 재예약 실패`는 TS-003의 DateTrigger 버그가 이 상황에서 추가로 노출된 것.
+
+**해결**
+
+1. `crawl_news` management command 신규 생성
+
+```python
+# articles/management/commands/crawl_news.py
+class Command(BaseCommand):
+    help = "활성 키워드로 네이버 뉴스 수집 (스케줄러 없이 단독 실행)"
+
+    def handle(self, *args, **options):
+        from articles.tasks import crawl_news
+        n = crawl_news()
+        self.stdout.write(self.style.SUCCESS(f"수집 완료: {n}건"))
+```
+
+2. `SchedulerConfig.ready()`에 관리 명령어 감지 로직 추가
+
+```python
+# scheduler/apps.py
+_NO_SCHEDULER_CMDS = {
+    "shell", "migrate", "crawl_news", "run_analysis", ...
+}
+
+def ready(self):
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    is_manage_py = "manage.py" in (sys.argv[0] if sys.argv else "")
+
+    if is_manage_py and cmd in _NO_SCHEDULER_CMDS:
+        return  # 관리 명령어에서는 스케줄러 미시작
+    ...
+```
+
+3. `crawl_news_sync` 제거 (`shell -c` 패턴과 함께 폐기)
+
+**교훈**
+
+`manage.py shell -c`는 Django 전체를 로드하므로 `AppConfig.ready()`도 실행된다.
+"스크립트처럼 쓰는 shell 커맨드"와 "서버 환경"은 분리되어야 한다.
+수동 실행이 필요한 기능은 반드시 전용 management command로 만들어야 한다.
+
+---
+
+### TS-005. `just analyze` 진행 상황 불투명 → 건별 실시간 출력
+
+**발생 시점**: v2.2 운영 중 (사용성 문제)
+
+**원래 구현**
+
+```python
+# run_analysis.py
+for i, article in enumerate(qs.iterator(), 1):
+    ok = analyze_single_article(article)
+    if i % 50 == 0:  # 50건마다 한 번 출력
+        self.stdout.write(f"  {i}/{total} 완료...")
+```
+
+**증상**
+
+기사 1건 분석에 평균 1~2초 소요. 50건이 쌓일 때까지 CLI에 아무 출력이 없어
+"멈춘 건지, 실행 중인 건지" 알 수 없었다. 특히 첫 50건이 완료되기까지 최대 1~2분간
+완전한 침묵.
+
+**해결**
+
+```python
+# 건별 즉시 출력 + 10건마다 ETA 요약
+for i, article in enumerate(qs.iterator(), 1):
+    t0 = time.time()
+    ok = analyze_single_article(article)
+    elapsed_item = time.time() - t0
+
+    tag = self.style.SUCCESS("✓") if ok else self.style.ERROR("✗")
+    self.stdout.write(f"[{i:{pad}d}/{total}] {tag} {elapsed_item:5.1f}s │ {article.title[:60]}")
+
+    if i % 10 == 0:
+        avg = (time.time() - start) / i
+        eta = _eta(time.time() - start, i, total)
+        self.stdout.write(f"  진행 {i/total*100:5.1f}% │ 평균 {avg:.1f}s/건 │ 남은시간 약 {eta}")
+```
+
+출력 예시:
+```
+분석 시작: 307건
+────────────────────────────────────────────────────────────────────────
+[  1/307] ✓  1.2s │ 법무법인 '허위 소송비' 수임료 반환 소송...
+[  2/307] ✓  0.9s │ 재건축 조합장 업무상 배임 혐의로...
+...
+[  10/307]          진행  3.2% │ 평균 1.1s/건 │ 남은시간 약 5분
+────────────────────────────────────────────────────────────────────────
+완료: 307건 처리 — 성공 300  실패 7  (소요 5.6분, 평균 1.1s/건)
+```
+
+**교훈**
+
+배치 처리 CLI는 처음부터 건별 실시간 출력을 해야 한다.
+"50건마다 출력"은 개발자 입장에서 로그 비용을 줄이는 것처럼 보이지만,
+실제로는 프로세스 상태를 알 수 없어서 불안감만 키운다.

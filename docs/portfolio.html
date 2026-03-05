@@ -409,11 +409,11 @@
 
     <div class="metrics">
       <div class="metric-card">
-        <div class="number">4,777</div>
+        <div class="number">5,288</div>
         <div class="label">수집된 법률 뉴스 기사</div>
       </div>
       <div class="metric-card">
-        <div class="number gold">72</div>
+        <div class="number gold">299</div>
         <div class="label">AI가 분류한 사건 그룹</div>
       </div>
       <div class="metric-card">
@@ -709,6 +709,27 @@
           프론트엔드에 깔끔하게 노출했습니다.
         </p>
       </div>
+
+      <div class="challenge-card">
+        <div class="problem-label">문제 5</div>
+        <h3>스케줄러-관리명령어 충돌</h3>
+        <p>
+          <code>just crawl</code>이 내부적으로 <code>manage.py shell -c</code>를 사용했기 때문에,
+          Django가 로드되면서 APScheduler도 자동 시작되었습니다.
+          그 결과 shell 커맨드의 직접 수집과 스케줄러의 백그라운드 수집이 동시에 실행되어
+          <code>KeyboardInterrupt</code> 크래시와 <code>'No job by the id of analyze was found'</code>
+          에러가 발생했습니다.
+        </p>
+        <div class="solution-label">해결</div>
+        <p>
+          <code>SchedulerConfig.ready()</code>에서 <code>sys.argv</code>를 검사하여
+          관리 명령어 실행 시 스케줄러를 미시작하도록 수정했습니다.
+          아울러 <code>crawl_news</code> 전용 management command를 신규 생성하여
+          <code>shell -c</code> 해킹을 제거했습니다.
+          <code>DateTrigger</code> 잡의 재예약 방식도 <code>reschedule_job</code>에서
+          <code>add_job(replace_existing=True)</code>으로 수정하여 재예약 실패 에러를 제거했습니다.
+        </p>
+      </div>
     </div>
 
     <div style="margin-top: 32px;">
@@ -863,22 +884,22 @@ LAW_STOPWORDS = {<span class="string">"소송"</span>, <span class="string">"피
     <div class="result-grid">
       <div class="result-card high">
         <div class="result-label">High 적합도</div>
-        <div class="result-num">28건</div>
+        <div class="result-num">189건</div>
         <p>즉시 검토 권장 사건</p>
       </div>
       <div class="result-card medium">
         <div class="result-label">Medium 적합도</div>
-        <div class="result-num">20건</div>
+        <div class="result-num">74건</div>
         <p>추가 조사 필요 사건</p>
       </div>
       <div class="result-card neutral">
         <div class="result-label">사건 그룹</div>
-        <div class="result-num">72개</div>
+        <div class="result-num">299개</div>
         <p>AI가 자동 분류한 독립 사건</p>
       </div>
       <div class="result-card neutral">
         <div class="result-label">수집 기사</div>
-        <div class="result-num">4,777건</div>
+        <div class="result-num">5,288건</div>
         <p>95개 언론사, 7개 키워드</p>
       </div>
     </div>
