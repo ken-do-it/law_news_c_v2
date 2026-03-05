@@ -77,7 +77,10 @@ def _run_analyze() -> None:
                 ok = analyze_single_article(article)
                 if ok:
                     success += 1
-                    _state["quota_error"] = None  # 성공하면 에러 상태 해제
+                    if _state.get("quota_error"):
+                        _state["quota_error"] = None
+                        from analyses.tasks import clear_quota_error
+                        clear_quota_error()
                 else:
                     failed += 1
             except Exception as e:
@@ -87,6 +90,8 @@ def _run_analyze() -> None:
                         _state["quota_error"] = "Gemini 일일 요청 한도 초과 — 내일 오전 9시(KST) 이후 자동 재개됩니다."
                     else:
                         _state["quota_error"] = "Gemini API 분당 요청 한도 초과 — 5분 후 자동 재개됩니다."
+                    from analyses.tasks import set_quota_error
+                    set_quota_error(_state["quota_error"])
                     logger.warning("API 한도 초과 — 분석 중단: %s", _state["quota_error"])
                     break
                 article.status = "failed"
@@ -193,9 +198,12 @@ def get_scheduler_state() -> dict:
         if job and job.next_run_time:
             next_run_at = job.next_run_time.isoformat()
 
+    from analyses.tasks import get_quota_error
+    quota_error = _state.get("quota_error") or get_quota_error()
+
     return {
         "is_running": _state["is_running"],
         "last_run_at": _state["last_run_at"],
         "next_run_at": next_run_at,
-        "quota_error": _state.get("quota_error"),
+        "quota_error": quota_error,
     }

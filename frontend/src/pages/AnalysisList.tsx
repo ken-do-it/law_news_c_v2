@@ -16,7 +16,7 @@ function formatDate(iso: string): string {
   return iso.slice(0, 10);
 }
 
-// 정렬 가능한 컬럼 헤더
+// 정렬 가능한 컬럼 헤더 (다중 정렬 지원)
 function SortTh({
   field,
   ordering,
@@ -30,8 +30,10 @@ function SortTh({
   children: ReactNode;
   className?: string;
 }) {
-  const isDesc = ordering === `-${field}`;
-  const isAsc = ordering === field;
+  const parts = ordering.split(',').filter(Boolean);
+  const found = parts.find((p) => p === field || p === `-${field}`);
+  const isDesc = found === `-${field}`;
+  const isAsc = found === field;
   const active = isDesc || isAsc;
 
   return (
@@ -108,7 +110,37 @@ export default function AnalysisList() {
   const activeSuitability = searchParams.get('suitability') || 'all';
   const ordering = filters.ordering ?? '-analyzed_at';
 
-  // 기사 발행일 기준 정렬 활성 여부
+  // 다중 정렬: ordering은 콤마로 구분된 필드 목록일 수 있음
+  const orderingParts = ordering.split(',').filter(Boolean);
+
+  // 특정 필드의 현재 정렬 방향 반환 ('desc' | 'asc' | null)
+  const getFieldDir = (field: string): 'desc' | 'asc' | null => {
+    const found = orderingParts.find((p) => p === field || p === `-${field}`);
+    if (!found) return null;
+    return found.startsWith('-') ? 'desc' : 'asc';
+  };
+
+  // 숫자 정렬 필드 토글: off→desc→asc→off, 다른 활성 필드는 유지
+  const toggleNumericSort = (field: string) => {
+    const others = orderingParts.filter((p) => p !== field && p !== `-${field}`);
+    const dir = getFieldDir(field);
+    let next: string[];
+    if (dir === null) {
+      next = [`-${field}`, ...others];          // 비활성 → 내림차순
+    } else if (dir === 'desc') {
+      next = [field, ...others];                // 내림차순 → 오름차순
+    } else {
+      next = others.length ? others : ['-analyzed_at']; // 오름차순 → 제거
+    }
+    setFilter('ordering', next.join(','));
+  };
+
+  const damageDir = getFieldDir('damage_amount_num');
+  const victimDir = getFieldDir('victim_count_num');
+  const damageSortActive = damageDir !== null;
+  const victimSortActive = victimDir !== null;
+
+  // 기사 발행일 기준 정렬 활성 여부 (단일 필드, 다중 정렬과 별도)
   const pubSortActive = ordering === '-published_at' || ordering === 'published_at';
 
   return (
@@ -221,18 +253,21 @@ export default function AnalysisList() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left bg-gray-50">
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide w-[28%]">기사 제목</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">케이스</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide w-[25%]">기사 제목</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[10%]">케이스</th>
                 <SortTh field="suitability_rank" ordering={ordering} onSort={toggleSort} className="w-[8%]">
                   AI 적합도
                 </SortTh>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">사건 유형</th>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[10%]">진행단계</th>
-                <SortTh field="damage_amount_num" ordering={ordering} onSort={toggleSort} className="w-[13%]">
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[9%]">사건 유형</th>
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[9%]">진행단계</th>
+                <SortTh field="victim_count_num" ordering={ordering} onSort={toggleNumericSort} className="w-[9%]">
+                  피해자 수
+                </SortTh>
+                <SortTh field="damage_amount_num" ordering={ordering} onSort={toggleNumericSort} className="w-[10%]">
                   피해규모
                 </SortTh>
-                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[11%]">상대방</th>
-                <SortTh field="analyzed_at" ordering={ordering} onSort={toggleSort} className="w-[8%]">
+                <th className="px-3 py-3 text-xs font-semibold text-gray-400 tracking-wide whitespace-nowrap w-[10%]">상대방</th>
+                <SortTh field="analyzed_at" ordering={ordering} onSort={toggleSort} className="w-[7%]">
                   분석일
                 </SortTh>
               </tr>
@@ -283,8 +318,11 @@ export default function AnalysisList() {
                       <td className="px-3 py-2.5">
                         {a.stage ? <StageBadge value={a.stage} /> : <span className="text-gray-400 text-xs">—</span>}
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[120px] truncate" title={a.damage_amount ?? ''}>
-                        {a.damage_amount || '—'}
+                      <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[90px] truncate" title={a.victim_count ?? ''}>
+                        {a.victim_count || <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[100px] truncate" title={a.damage_amount ?? ''}>
+                        {a.damage_amount || <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-gray-600 max-w-[100px] truncate" title={a.defendant ?? ''}>
                         {a.defendant || '—'}
@@ -296,7 +334,7 @@ export default function AnalysisList() {
                   ))}
                   {!loading && (data?.results ?? []).length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-gray-400">
+                      <td colSpan={9} className="py-12 text-center text-gray-400">
                         분석 결과가 없습니다
                       </td>
                     </tr>

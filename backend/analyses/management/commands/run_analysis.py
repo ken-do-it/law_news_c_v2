@@ -47,7 +47,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from articles.models import Article
-        from analyses.tasks import DailyQuotaExceededError, analyze_single_article
+        from analyses.tasks import DailyQuotaExceededError, analyze_single_article, set_quota_error, clear_quota_error
 
         limit = options["limit"]
         qs = Article.objects.filter(
@@ -76,6 +76,8 @@ class Command(BaseCommand):
                 if ok:
                     success += 1
                     tag = self.style.SUCCESS("✓")
+                    if success == 1:  # 첫 성공 시 quota 에러 상태 해제
+                        clear_quota_error()
                 else:
                     failed += 1
                     tag = self.style.ERROR("✗")
@@ -89,6 +91,7 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.WARNING("기사 상태는 pending 유지. 내일 다시 실행하세요.")
                 )
+                set_quota_error("Gemini 일일 요청 한도 초과 — 내일 오전 9시(KST) 이후 자동 재개됩니다.")
                 break
             except Exception as e:
                 article.status = "failed"
