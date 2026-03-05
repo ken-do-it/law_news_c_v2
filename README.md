@@ -135,6 +135,19 @@ just analyze    # AI 분석만 (pending 기사 전체)
 just analyze --limit 100  # 100건만 분석
 ```
 
+`just analyze` 실행 시 건별 실시간 진행 상황이 출력됩니다:
+
+```
+분석 시작: 307건
+────────────────────────────────────────────────────────────────────────
+[  1/307] ✓  1.2s │ 법무법인 '허위 소송비' 수임료 반환 소송...
+[  2/307] ✓  0.9s │ 재건축 조합장 업무상 배임 혐의로...
+...
+[  10/307]           진행  3.2% │ 평균 1.1s/건 │ 남은시간 약 5분
+────────────────────────────────────────────────────────────────────────
+완료: 307건 처리 — 성공 300  실패 7  (소요 5.6분, 평균 1.1s/건)
+```
+
 ---
 
 ## 주요 명령어 모음
@@ -160,8 +173,8 @@ just analyze --limit 100  # 100건만 분석
 
 | 명령어 | 설명 |
 |--------|------|
-| `just crawl` | 뉴스 수집 (7개 키워드 × 100건) |
-| `just analyze` | 대기 중인 기사 전체 AI 분석 |
+| `just crawl` | 뉴스 수집 (7개 키워드 × 100건, 스케줄러 충돌 없음) |
+| `just analyze` | 대기 중인 기사 전체 AI 분석 (건별 실시간 진행 출력) |
 | `just analyze --limit N` | N건만 분석 |
 | `just pipeline` | 수집 → 분석 한 번에 실행 |
 | `just regroup` | 기존 분석 케이스 그룹 재매칭 |
@@ -404,11 +417,12 @@ law_news_c_v2/                    ← 프로젝트 루트
 │   ├── articles/                 ← 뉴스 기사 앱 (수집 담당)
 │   │   ├── models.py             ← 모델: MediaSource, Keyword, Article
 │   │   ├── crawlers.py           ← 네이버 뉴스 API 크롤러
-│   │   ├── tasks.py              ← crawl_news_sync() 함수
+│   │   ├── tasks.py              ← crawl_news() Celery 태스크
 │   │   ├── serializers.py
 │   │   ├── views.py
 │   │   └── management/commands/
-│   │       └── seed_initial_data.py
+│   │       ├── seed_initial_data.py
+│   │       └── crawl_news.py     ← just crawl (스케줄러 없이 단독 실행)
 │   │
 │   ├── analyses/                 ← AI 분석 앱
 │   │   ├── models.py             ← 모델: CaseGroup, Analysis
@@ -423,7 +437,7 @@ law_news_c_v2/                    ← 프로젝트 루트
 │   │       └── regroup_analyses.py
 │   │
 │   └── scheduler/                ← APScheduler 앱
-│       ├── apps.py               ← Django 앱 시작 시 스케줄러 자동 시작
+│       ├── apps.py               ← 웹 서버 실행 시에만 스케줄러 시작 (관리 명령어에서는 미시작)
 │       └── scheduler.py          ← crawl(60분) + analyze(5분) 두 개 독립 잡
 │
 └── frontend/                     ← React 프론트엔드

@@ -18,6 +18,21 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+_W = 60  # 제목 출력 최대 너비
+
+
+def _fmt_time(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.0f}초"
+    return f"{seconds / 60:.1f}분"
+
+
+def _eta(elapsed: float, done: int, total: int) -> str:
+    if done == 0:
+        return "?"
+    remaining = (elapsed / done) * (total - done)
+    return _fmt_time(remaining)
+
 
 class Command(BaseCommand):
     help = "pending 기사 전체 LLM 분석 (크롤링 없음)"
@@ -42,39 +57,65 @@ class Command(BaseCommand):
             qs = qs[:limit]
 
         total = qs.count()
-        self.stdout.write(f"분석 대상: {total}건 시작")
+        if total == 0:
+            self.stdout.write(self.style.WARNING("분석 대상 없음 (pending 기사가 없습니다)"))
+            return
+
+        pad = len(str(total))  # 숫자 자릿수 맞추기용
+        self.stdout.write(f"\n분석 시작: {total}건")
+        self.stdout.write("─" * 72)
 
         success = failed = 0
         start = time.time()
 
         for i, article in enumerate(qs.iterator(), 1):
+            t0 = time.time()
+            tag = ok = None
             try:
                 ok = analyze_single_article(article)
                 if ok:
                     success += 1
+                    tag = self.style.SUCCESS("✓")
                 else:
                     failed += 1
+                    tag = self.style.ERROR("✗")
             except Exception as e:
                 article.status = "failed"
                 article.retry_count += 1
                 article.save(update_fields=["status", "retry_count"])
                 failed += 1
-                self.stdout.write(f"  [오류] {article.title[:50]}: {e}")
-
-            if i % 50 == 0:
-                elapsed = time.time() - start
-                rate = i / elapsed
-                remaining = (total - i) / rate if rate > 0 else 0
+                tag = self.style.ERROR("✗")
+                # 예외 메시지를 제목 뒤에 붙임
+                short_title = f"[오류: {str(e)[:40]}]"
+                elapsed_item = time.time() - t0
                 self.stdout.write(
-                    f"  {i}/{total} 완료 "
-                    f"(성공 {success} / 실패 {failed}) "
-                    f"— 남은 시간 약 {remaining/60:.0f}분"
+                    f"[{i:{pad}d}/{total}] {tag} {elapsed_item:5.1f}s │ {short_title}"
+                )
+                continue
+
+            elapsed_item = time.time() - t0
+            short_title = article.title[:_W].ljust(_W)
+            self.stdout.write(
+                f"[{i:{pad}d}/{total}] {tag} {elapsed_item:5.1f}s │ {short_title}"
+            )
+
+            # 10건마다 진행률 요약 줄 출력
+            if i % 10 == 0:
+                elapsed = time.time() - start
+                avg = elapsed / i
+                eta = _eta(elapsed, i, total)
+                pct = i / total * 100
+                self.stdout.write(
+                    f"{'':>{pad + 10}}  "
+                    f"진행 {pct:5.1f}% │ 평균 {avg:.1f}s/건 │ 남은시간 약 {eta}"
                 )
 
         elapsed = time.time() - start
+        self.stdout.write("─" * 72)
         self.stdout.write(
             self.style.SUCCESS(
-                f"\n완료: 전체 {total}건 — 성공 {success}, 실패 {failed} "
-                f"(소요 {elapsed/60:.1f}분)"
+                f"완료: {total}건 처리 — "
+                f"성공 {success}  실패 {failed}  "
+                f"(소요 {_fmt_time(elapsed)}, 평균 {elapsed/total:.1f}s/건)"
             )
         )

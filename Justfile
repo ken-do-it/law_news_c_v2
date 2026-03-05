@@ -94,7 +94,7 @@ dbshell:
 
 [doc("뉴스 수집 (동기 실행)")]
 crawl:
-    {{manage}} shell -c "from articles.tasks import crawl_news_sync; n = crawl_news_sync(); print(f'수집 완료: {n}건')"
+    {{manage}} crawl_news
 
 [doc("대기 중인 기사 전체 AI 분석 (크롤링 없이, --limit N 으로 건수 제한)")]
 analyze *args:
@@ -102,7 +102,7 @@ analyze *args:
 
 [doc("수집 → 분석 전체 파이프라인 (단발 실행)")]
 pipeline:
-    {{manage}} shell -c "from articles.tasks import crawl_news_sync; n = crawl_news_sync(); print(f'수집: {n}건')"
+    {{manage}} crawl_news
     {{manage}} run_analysis
 
 [doc("기존 분석의 케이스 그룹 재매칭 (just regroup / just regroup --all / just regroup --dry-run)")]

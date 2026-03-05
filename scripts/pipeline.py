@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from articles.tasks import crawl_news_sync  # noqa: E402
+from articles.tasks import crawl_news  # noqa: E402
 from analyses.tasks import analyze_single_article  # noqa: E402
 from articles.models import Article  # noqa: E402
 
@@ -19,7 +19,7 @@ def main():
     print('\n' + '=' * 50)
     print('  STEP 1: 뉴스 수집')
     print('=' * 50 + '\n')
-    new_count = crawl_news_sync()
+    new_count = crawl_news()
     print(f'  → 새 기사 {new_count}건 수집됨')
 
     # 2) 분석

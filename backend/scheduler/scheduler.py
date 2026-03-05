@@ -35,8 +35,8 @@ def _run_crawl() -> None:
         return
     try:
         logger.info("=== 뉴스 수집 시작 ===")
-        from articles.tasks import crawl_news_sync
-        new_count = crawl_news_sync()
+        from articles.tasks import crawl_news
+        new_count = crawl_news()
         logger.info("수집 완료: %d건", new_count)
     except Exception as e:
         logger.error("수집 오류: %s", e, exc_info=True)
@@ -101,13 +101,24 @@ def _run_analyze() -> None:
 # ──────────────────────────────────────────────────────────
 
 def _reschedule(job_id: str, minutes: int) -> None:
-    """잡 완료 후 다음 실행 예약"""
+    """잡 완료 후 다음 실행 예약.
+
+    DateTrigger 잡은 실행 후 스케줄러에서 자동 제거되므로
+    reschedule_job 대신 add_job(replace_existing=True)으로 재등록한다.
+    """
     if not (_scheduler and _scheduler.running):
         return
     next_run = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    job_func = _run_crawl if job_id == "crawl" else _run_analyze
     try:
         from apscheduler.triggers.date import DateTrigger
-        _scheduler.reschedule_job(job_id, trigger=DateTrigger(run_date=next_run))
+        _scheduler.add_job(
+            job_func,
+            trigger=DateTrigger(run_date=next_run),
+            id=job_id,
+            replace_existing=True,
+            max_instances=1,
+        )
         logger.info("다음 %s 예약: %s", job_id, next_run.isoformat())
     except Exception as e:
         logger.error("%s 재예약 실패: %s", job_id, e)

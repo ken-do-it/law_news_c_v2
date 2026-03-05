@@ -110,7 +110,3 @@ def crawl_news(self):
     return total_new
 
 
-@shared_task
-def crawl_news_sync():
-    """동기식 크롤링 (테스트/수동 실행용) — Celery 없이 직접 호출"""
-    return crawl_news()
