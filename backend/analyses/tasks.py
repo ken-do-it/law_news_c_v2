@@ -27,6 +27,28 @@ def _is_any_quota_error(e: Exception) -> bool:
     """429 rate limit 에러 감지 (일일 한도 및 분당 한도 모두 포함)"""
     return "RESOURCE_EXHAUSTED" in str(e)
 
+
+# ---------------------------------------------------------------------------
+# 프로세스 간 공유 quota 상태 (파일 캐시 → CLI/스케줄러 모두 읽기·쓰기 가능)
+# ---------------------------------------------------------------------------
+_QUOTA_CACHE_KEY = "gemini_quota_error"
+_QUOTA_CACHE_TTL = 60 * 60 * 24  # 24시간
+
+
+def set_quota_error(msg: str) -> None:
+    from django.core.cache import cache
+    cache.set(_QUOTA_CACHE_KEY, msg, timeout=_QUOTA_CACHE_TTL)
+
+
+def clear_quota_error() -> None:
+    from django.core.cache import cache
+    cache.delete(_QUOTA_CACHE_KEY)
+
+
+def get_quota_error() -> str | None:
+    from django.core.cache import cache
+    return cache.get(_QUOTA_CACHE_KEY)
+
 # 제목 키워드 기반 그룹 매칭 — 공유 키워드 N개 이상이면 같은 사건 그룹으로 판단
 # 낮을수록 동일 토픽의 다른 사건이 합쳐질 위험 증가
 TITLE_KEYWORD_MATCH_COUNT = 5
@@ -106,10 +128,12 @@ def parse_damage_amount(text: str) -> int | None:
     파싱 불가(미상, 빈값 등)이면 None 반환.
 
     예시:
-      "약 500억원"        → 50_000_000_000
-      "1,200만원"         → 12_000_000
-      "2조 3천억원"        → 2_300_000_000_000
-      "수백억 원대", "미상" → None
+      "약 500억원"    → 50_000_000_000
+      "1,200만원"     → 12_000_000
+      "2조 3천억원"   → 2_300_000_000_000
+      "수백억 원대"   → 30_000_000_000  (보수적 추정값)
+      "수조 원대"     → 3_000_000_000_000
+      "미상"          → None
     """
     if not text or not isinstance(text, str):
         return None
@@ -119,13 +143,27 @@ def parse_damage_amount(text: str) -> int | None:
     if re.search(r"미상|불명|알\s*수\s*없|불확실|확인\s*안\s*됨|확인\s*불가", text):
         return None
 
-    # 숫자가 전혀 없으면 파싱 불가
-    if not re.search(r"\d", text):
-        return None
-
     try:
         # 쉼표, 공백 정규화
         t = re.sub(r",", "", text)
+
+        # 한자어 수사 단독 처리 (숫자 없이 "수조", "수백억" 등)
+        if not re.search(r"\d", t):
+            if re.search(r"수\s*조", t):
+                return 3_000_000_000_000    # 수조 ≈ 3조
+            if re.search(r"수\s*천\s*억", t):
+                return 300_000_000_000      # 수천억 ≈ 3000억
+            if re.search(r"수\s*백\s*억", t):
+                return 30_000_000_000       # 수백억 ≈ 300억
+            if re.search(r"수\s*십\s*억", t):
+                return 5_000_000_000        # 수십억 ≈ 50억
+            if re.search(r"수\s*억", t):
+                return 500_000_000          # 수억 ≈ 5억
+            if re.search(r"수\s*천\s*만", t):
+                return 30_000_000           # 수천만 ≈ 3000만
+            if re.search(r"수\s*백\s*만", t):
+                return 3_000_000            # 수백만 ≈ 300만
+            return None
 
         total = 0
 
@@ -180,13 +218,24 @@ def parse_victim_count(text: str) -> int | None:
     if re.search(r"미상|불명|알\s*수\s*없|불확실|확인\s*안\s*됨|확인\s*불가", text):
         return None
 
-    if not re.search(r"\d", text):
-        return None
-
     try:
         t = re.sub(r",", "", text)
 
         total = 0
+
+        # 한자어 수사 단독 처리 (숫자 없이 "수만", "수십만" 등)
+        # 수십만 > 수만 > 수천 > 수백 순으로 체크
+        if re.search(r"수\s*십\s*만", t):
+            return 200_000   # 수십만 ≈ 200,000 (보수적 하한)
+        if re.search(r"수\s*만", t) and not re.search(r"\d", t):
+            return 30_000    # 수만 ≈ 30,000
+        if re.search(r"수\s*천", t) and not re.search(r"\d", t):
+            return 3_000     # 수천 ≈ 3,000
+        if re.search(r"수\s*백", t) and not re.search(r"\d", t):
+            return 300       # 수백 ≈ 300
+
+        if not re.search(r"\d", t):
+            return None
 
         # 만 단위
         m = re.search(r"([\d.]+)\s*만", t)

@@ -9,7 +9,7 @@ import type { DashboardStats, Analysis, SchedulerState, CaseGroup } from '../lib
 import SuitabilityBadge from '../components/SuitabilityBadge';
 import StageBadge from '../components/StageBadge';
 
-function SchedulerBanner({ state }: { state: SchedulerState | null }) {
+function SchedulerBanner({ state, pendingCount }: { state: SchedulerState | null; pendingCount?: number }) {
   if (!state) return null;
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -39,6 +39,12 @@ function SchedulerBanner({ state }: { state: SchedulerState | null }) {
           {state.next_run_at ? fmtTime(state.next_run_at) : '—'}
         </span>
       </span>
+      {pendingCount != null && pendingCount > 0 && (
+        <span className="flex items-center gap-1 text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 text-xs font-medium">
+          <span className="animate-pulse">●</span>
+          분석 대기 {pendingCount.toLocaleString()}건
+        </span>
+      )}
       {state.last_run_at && (
         <span className="text-gray-400 text-xs ml-auto">
           마지막 수집: {fmtTime(state.last_run_at)}
@@ -353,7 +359,7 @@ export default function Dashboard() {
       </div>
 
       {/* 수집 스케줄 상태 배너 */}
-      <SchedulerBanner state={stats.scheduler_state} />
+      <SchedulerBanner state={stats.scheduler_state} pendingCount={stats.pending_count} />
 
       {/* 심사 KPI */}
       <div>

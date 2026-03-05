@@ -40,7 +40,9 @@ export interface Analysis {
   case_category: string;
   defendant: string | null;
   damage_amount: string | null;
+  damage_amount_num: number | null;
   victim_count: string | null;
+  victim_count_num: number | null;
   stage: string;
   case_id: string | null;
   case_name: string | null;

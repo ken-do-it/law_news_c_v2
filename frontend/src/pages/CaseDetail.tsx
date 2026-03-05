@@ -153,7 +153,7 @@ export default function CaseDetail() {
                 <div
                   key={a.id}
                   ref={(r) => { articleRefs.current[a.id] = r; }}
-                  className={`border-b border-gray-100 pb-3 last:border-0 last:pb-0 ${articleId === String(a.id) ? 'ring-2 ring-navy ring-inset rounded-lg p-2 -m-2' : ''}`}
+                  className={`border-b border-gray-100 last:border-0 ${articleId === String(a.id) ? 'ring-2 ring-navy rounded-lg p-3 mb-1' : 'pb-3 last:pb-0'}`}
                 >
                   <div className="flex items-start gap-2">
                     <SuitabilityBadge value={a.suitability} />
