@@ -406,6 +406,21 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             else 0
         )
 
+        # ── 8-2. High/Medium 케이스 수 (케이스 기준 중복 제거) ──
+        # High: 케이스 내 High 기사가 1건 이상인 케이스 수
+        # Medium: High 없이 Medium만 있는 케이스 수
+        high_case_ids = CaseGroup.objects.filter(
+            analyses__suitability="High"
+        ).values("id").distinct()
+        high_cases = high_case_ids.count()
+        medium_cases = (
+            CaseGroup.objects
+            .filter(analyses__suitability="Medium")
+            .exclude(id__in=high_case_ids)
+            .distinct()
+            .count()
+        )
+
         # ── 9. 스케줄러 상태 (다음 수집 시간 등) ──
         try:
             from scheduler.scheduler import get_scheduler_state
@@ -431,6 +446,8 @@ class AnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             "total_reviewed": total_reviewed,
             "total_accepted": total_accepted,
             "acceptance_rate": acceptance_rate,
+            "high_cases": high_cases,
+            "medium_cases": medium_cases,
             "scheduler_state": scheduler_state,
         })
 

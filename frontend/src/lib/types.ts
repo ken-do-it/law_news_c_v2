@@ -116,5 +116,7 @@ export interface DashboardStats {
   total_reviewed_cases: number;
   total_accepted_cases: number;
   acceptance_rate_cases: number;
+  high_cases: number;
+  medium_cases: number;
   scheduler_state: SchedulerState | null;
 }

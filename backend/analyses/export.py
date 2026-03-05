@@ -230,6 +230,27 @@ _COL_HEADERS = ["No", "케이스 ID", "기사 제목", "언론사", "게재일",
 _ROW_H = 8
 
 
+_SUIT_RANK = {"High": 0, "Medium": 1, "Low": 2}
+
+
+def _deduplicate_by_case(analyses: list) -> list:
+    """케이스 ID 기준으로 중복 제거 — 동일 케이스이면 적합도가 가장 높은 기사 대표로 선택"""
+    seen: dict = {}
+    no_case = []
+    for a in analyses:
+        case_id = a.case_group.case_id if a.case_group else None
+        if not case_id:
+            no_case.append(a)
+            continue
+        existing = seen.get(case_id)
+        if existing is None:
+            seen[case_id] = a
+        else:
+            if _SUIT_RANK.get(a.suitability, 99) < _SUIT_RANK.get(existing.suitability, 99):
+                seen[case_id] = a
+    return list(seen.values()) + no_case
+
+
 def _fit_text(pdf: "FPDF", text: str, max_width: float) -> str:
     """현재 설정된 폰트 기준으로 max_width(mm)에 맞게 텍스트 자르기"""
     if pdf.get_string_width(text) <= max_width:
@@ -336,22 +357,29 @@ def export_analyses_to_pdf(queryset, period: str = "weekly") -> io.BytesIO:
     reviewed = [a for a in analyses if a.review_completed]
     accepted = [a for a in analyses if a.accepted]
 
-    total = len(analyses)
-    high_cnt = sum(1 for a in analyses if a.suitability == "High")
-    medium_cnt = sum(1 for a in analyses if a.suitability == "Medium")
-    accepted_cnt = len(accepted)
+    # 표지 통계: 케이스 기준 (중복 제거)
+    dedup_analyses = _deduplicate_by_case(analyses)
+    dedup_reviewed = _deduplicate_by_case(reviewed)
+    dedup_accepted = _deduplicate_by_case(accepted)
 
-    # ── 요약 통계 박스 4개 ─────────────────────────
+    total = len(dedup_analyses)
+    high_cnt = sum(1 for a in dedup_analyses if a.suitability == "High")
+    medium_cnt = sum(1 for a in dedup_analyses if a.suitability == "Medium")
+    reviewed_cnt = len(dedup_reviewed)
+    accepted_cnt = len(dedup_accepted)
+
+    # ── 요약 통계 박스 5개 ─────────────────────────
     pdf.ln(20)
     pdf.set_draw_color(226, 232, 240)
-    box_w = 55
+    box_w = 48
     box_h = 22
-    start_x = (pdf.w - box_w * 4 - 6 * 3) / 2
+    start_x = (pdf.w - box_w * 5 - 6 * 4) / 2
     start_y = pdf.get_y()
     stats = [
-        ("대상 기사", str(total), (59, 130, 246)),
+        ("대상 케이스", str(total), (59, 130, 246)),
         ("High 적합", str(high_cnt), (220, 38, 38)),
         ("Medium 적합", str(medium_cnt), (234, 179, 8)),
+        ("심사 완료", str(reviewed_cnt), (99, 102, 241)),
         ("심사 통과", str(accepted_cnt), (34, 197, 94)),
     ]
     for i, (title, value, color) in enumerate(stats):
@@ -369,12 +397,12 @@ def export_analyses_to_pdf(queryset, period: str = "weekly") -> io.BytesIO:
         pdf.cell(box_w, 6, title, align="C")
 
     # ── 섹션 1: 전체 분석 결과 ───────────────────────
-    _render_section_table(pdf, "1. 전체 분석 결과 (High·Medium)", analyses)
+    _render_section_table(pdf, "1. 전체 분석 결과 (High·Medium)", dedup_analyses)
 
     # ── 섹션 2: 심사 완료 목록 ───────────────────────
-    _render_section_table(pdf, "2. 심사 완료 목록", reviewed)
+    _render_section_table(pdf, "2. 심사 완료 목록", _deduplicate_by_case(reviewed))
 
     # ── 섹션 3: 심사 통과 목록 ───────────────────────
-    _render_section_table(pdf, "3. 심사 통과 목록", accepted)
+    _render_section_table(pdf, "3. 심사 통과 목록", _deduplicate_by_case(accepted))
 
     return io.BytesIO(pdf.output())
