@@ -374,7 +374,7 @@ export default function Dashboard() {
             accent="#8B5CF6"
           />
           <KpiCard
-            label="수임 통과"
+            label="심사 통과"
             value={stats.total_accepted.toLocaleString()}
             sub="건 채택"
             accent="#10B981"
