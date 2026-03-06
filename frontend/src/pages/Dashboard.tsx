@@ -204,8 +204,6 @@ export default function Dashboard() {
   const total = stats.total_analyzed;
   const highCount = stats.suitability_distribution.find((d) => d.name === 'High')?.value ?? 0;
   const mediumCount = stats.suitability_distribution.find((d) => d.name === 'Medium')?.value ?? 0;
-  const reviewedPct = total ? Math.round((stats.total_reviewed / total) * 100) : 0;
-
   const weeklyData = stats.weekly_trend.map((d) => ({ ...d, date: formatDateShort(d.date) }));
 
   return (
@@ -372,19 +370,21 @@ export default function Dashboard() {
         <div className="grid grid-cols-3 gap-4">
           <KpiCard
             label="심사 완료"
-            value={stats.total_reviewed.toLocaleString()}
-            sub={`전체의 ${reviewedPct}%`}
+            value={stats.total_reviewed_cases.toLocaleString()}
+            sub="케이스 아이디 기준"
+            sub2={`기사 ${stats.total_reviewed.toLocaleString()}건`}
             accent="#8B5CF6"
           />
           <KpiCard
             label="심사 통과"
-            value={stats.total_accepted.toLocaleString()}
-            sub="건 채택"
+            value={stats.total_accepted_cases.toLocaleString()}
+            sub="케이스 아이디 기준"
+            sub2={`기사 ${stats.total_accepted.toLocaleString()}건`}
             accent="#10B981"
           />
           <KpiCard
             label="통과율"
-            value={`${stats.acceptance_rate}%`}
+            value={`${stats.acceptance_rate_cases}%`}
             sub="심사 완료 대비"
             accent="#F59E0B"
           />
