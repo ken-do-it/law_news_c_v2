@@ -13,7 +13,7 @@ export default function TopNav() {
   return (
     <nav className="bg-navy text-white px-6 py-3 flex items-center justify-between">
       <Link to="/" className="text-lg font-bold tracking-wide">
-        <span className="text-gold">LawNGood</span> News Analyzer
+        <span className="text-gold">Law&Good</span> News Analyzer
       </Link>
 
       <div className="flex items-center gap-6">
