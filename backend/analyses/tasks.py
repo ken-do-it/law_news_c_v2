@@ -328,8 +328,8 @@ def _case_similarity(a: str, b: str) -> float:
     tokens_a = {t for t in a.split() if len(t) >= 2 and t not in _CASE_STOPWORDS}
     tokens_b = {t for t in b.split() if len(t) >= 2 and t not in _CASE_STOPWORDS}
 
-    # 핵심 토큰(엔티티) 공유 여부
-    shared = tokens_a & tokens_b
+    # 핵심 토큰(엔티티) 공유 여부 — 4자 이상만 보너스 (짧은 일반 단어 오매칭 방지)
+    shared = {t for t in tokens_a & tokens_b if len(t) >= 4}
     if shared:
         bonus = min(len(shared) * 0.25, 0.5)
         return min(seq_ratio + bonus, 1.0)
